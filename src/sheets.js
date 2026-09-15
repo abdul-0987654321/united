@@ -100,4 +100,34 @@ function getStatus() {
   return { ...state };
 }
 
-module.exports = { syncLead, syncMessage, syncSettings, getStatus };
+/* ---------------- Session backup/restore - directly awaited, not queued ----------------
+ * Restoring must finish before the bot starts, and backing up should be a
+ * definite success/failure the caller can react to - so these bypass the
+ * background queue and call the script directly. */
+
+async function saveSessionChunks(chunks) {
+  return callScript('saveSession', { chunks }, 40000);
+}
+
+async function loadSessionChunks() {
+  const data = await callScript('loadSession', {}, 40000);
+  return data?.chunks || [];
+}
+
+async function clearSessionRemote() {
+  try {
+    await callScript('clearSession', {}, 15000);
+  } catch (err) {
+    console.error('Clearing remote session backup failed (non-fatal):', err.message);
+  }
+}
+
+module.exports = {
+  syncLead,
+  syncMessage,
+  syncSettings,
+  getStatus,
+  saveSessionChunks,
+  loadSessionChunks,
+  clearSessionRemote,
+};
