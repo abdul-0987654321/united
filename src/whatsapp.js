@@ -7,11 +7,64 @@ const {
 } = require('@itsliaaa/baileys');
 const QRCode = require('qrcode');
 const pino = require('pino');
+const fs = require('fs');
+const path = require('path');
 
 const { getAIResponse } = require('./ai');
 const store = require('./store');
+const config = require('./config');
+const sheets = require('./sheets');
 
 const logger = pino({ level: 'warn' });
+const SESSION_CHUNK_SIZE = 40000; // stay comfortably under a Sheet cell's ~50k char limit
+
+/** Bundles every file in the auth folder into one JSON string, split into chunks. */
+function readAuthFolderAsChunks() {
+  const dir = config.authDir;
+  if (!fs.existsSync(dir)) return [];
+  const bundle = {};
+  for (const file of fs.readdirSync(dir)) {
+    bundle[file] = fs.readFileSync(path.join(dir, file), 'utf8');
+  }
+  const json = JSON.stringify(bundle);
+  const chunks = [];
+  for (let i = 0; i < json.length; i += SESSION_CHUNK_SIZE) {
+    chunks.push(json.slice(i, i + SESSION_CHUNK_SIZE));
+  }
+  return chunks;
+}
+
+/** Backs up the current session to the Google Sheet - best-effort, never blocks anything. */
+async function backupSessionToSheet() {
+  try {
+    const chunks = readAuthFolderAsChunks();
+    if (!chunks.length) return;
+    await sheets.saveSessionChunks(chunks);
+    console.log('WhatsApp session backed up to Google Sheet.');
+  } catch (err) {
+    console.error('Session backup failed (non-fatal, will retry next connect):', err.message);
+  }
+}
+
+/** Restores a session from the Sheet backup if there's no local session yet - e.g. after a redeploy wiped the filesystem. */
+async function restoreSessionFromSheetIfNeeded() {
+  const dir = config.authDir;
+  const hasLocalSession = fs.existsSync(path.join(dir, 'creds.json'));
+  if (hasLocalSession) return;
+
+  try {
+    const chunks = await sheets.loadSessionChunks();
+    if (!chunks.length) return; // nothing backed up yet - a fresh QR scan is expected
+    const bundle = JSON.parse(chunks.join(''));
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [file, content] of Object.entries(bundle)) {
+      fs.writeFileSync(path.join(dir, file), content);
+    }
+    console.log('WhatsApp session restored from Google Sheet backup - no QR scan needed.');
+  } catch (err) {
+    console.error('Session restore failed, a fresh QR scan will be needed:', err.message);
+  }
+}
 
 // In-memory conversation history, keyed by phone. Resets on restart -
 // fine for an MVP; store.js (local JSON) is the source of truth for lead status.
@@ -167,7 +220,8 @@ async function startWhatsApp() {
     try { sock.ev.removeAllListeners(); } catch (err) { /* best-effort cleanup */ }
   }
 
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+  await restoreSessionFromSheetIfNeeded();
+  const { state, saveCreds } = await useMultiFileAuthState(config.authDir);
 
   let version;
   try {
@@ -221,6 +275,7 @@ async function startWhatsApp() {
       latestQrDataUrl = null;
       reconnectAttempts = 0;
       console.log('WhatsApp connected.');
+      backupSessionToSheet(); // fire-and-forget - no disk needed to survive a redeploy
     }
   });
 
@@ -271,13 +326,13 @@ function getLatestQr() {
 
 /** Logs out and clears the saved session so a fresh QR is generated - used to relink a different number from the dashboard. */
 async function resetConnection() {
-  const fs = require('fs');
   try {
     if (sock) await sock.logout();
   } catch (err) {
     console.error('Logout error (continuing anyway):', err);
   }
-  fs.rmSync('auth_info', { recursive: true, force: true });
+  fs.rmSync(config.authDir, { recursive: true, force: true });
+  await sheets.clearSessionRemote(); // don't let a stale session get restored next startup
   connectionStatus = 'disconnected';
   latestQrDataUrl = null;
   reconnectAttempts = 0;
