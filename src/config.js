@@ -29,11 +29,6 @@ const config = {
     website: process.env.BUSINESS_WEBSITE || '',
   },
 
-  // Where the WhatsApp session (login) is stored. On Render, point this at
-  // the persistent disk (e.g. /var/data/auth_info) so a redeploy doesn't
-  // force a fresh QR scan every time.
-  authDir: process.env.AUTH_DIR || 'auth_info',
-
   port: Number(process.env.PORT || 3000),
 };
 
