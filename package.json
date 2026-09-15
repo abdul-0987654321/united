@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@itsliaaa/baileys": "^0.3.18",
+    "link-preview-js": "^3.0.5",
     "qrcode": "^1.5.3",
     "pino": "^9.3.2",
     "express": "^4.19.2",
