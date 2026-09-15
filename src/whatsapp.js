@@ -10,7 +10,6 @@ const pino = require('pino');
 
 const { getAIResponse } = require('./ai');
 const store = require('./store');
-const config = require('./config');
 
 const logger = pino({ level: 'warn' });
 
@@ -168,7 +167,7 @@ async function startWhatsApp() {
     try { sock.ev.removeAllListeners(); } catch (err) { /* best-effort cleanup */ }
   }
 
-  const { state, saveCreds } = await useMultiFileAuthState(config.authDir);
+  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
 
   let version;
   try {
@@ -278,7 +277,7 @@ async function resetConnection() {
   } catch (err) {
     console.error('Logout error (continuing anyway):', err);
   }
-  fs.rmSync(config.authDir, { recursive: true, force: true });
+  fs.rmSync('auth_info', { recursive: true, force: true });
   connectionStatus = 'disconnected';
   latestQrDataUrl = null;
   reconnectAttempts = 0;
