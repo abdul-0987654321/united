@@ -1,0 +1,240 @@
+'use strict';
+/**
+ * store.js - KSC Carpets local-first data layer.
+ *
+ * Leads, messages, and settings live in local JSON files under DATA_DIR.
+ * All reads used by the bot and dashboard come from here - instant, no
+ * network dependency. The Google Sheet (via sheets.js) is a background
+ * mirror only: every write here also queues a best-effort sync to the
+ * Sheet, but a slow or unreachable Sheet NEVER blocks a WhatsApp reply
+ * or a dashboard page load.
+ */
+
+const fs = require('fs');
+const path = require('path');
+const sheets = require('./sheets');
+
+const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '..', 'data');
+fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const PATHS = {
+  leads: path.join(DATA_DIR, 'leads.json'),
+  messages: path.join(DATA_DIR, 'messages.json'),
+  settings: path.join(DATA_DIR, 'settings.json'),
+};
+
+function readJson(file, fallback) {
+  try {
+    if (!fs.existsSync(file)) return fallback;
+    const raw = fs.readFileSync(file, 'utf8');
+    if (!raw.trim()) return fallback;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error(`[store] could not read ${path.basename(file)}: ${err.message}`);
+    return fallback;
+  }
+}
+
+function writeJson(file, data) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, file); // atomic-ish, avoids a half-written file on crash
+}
+
+/* ---------------- Settings ---------------- */
+
+const DEFAULT_SETTINGS = {
+  botEnabled: true,
+  followupEnabled: true,
+  followupMessage: "Hi {name}, just checking back about your free measure with KSC Carpets - would you like to go ahead? Reply STOP if you'd rather we didn't contact you again.",
+  followupDelayHours: 24,
+  followupMaxAttempts: 3,
+  openDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], // which weekdays free measures can be booked on
+  reviewReminderEnabled: true,
+  reviewReminderDelayHours: 48,
+  reviewReminderMaxAttempts: 2,
+  reviewReminderMessage: "Hi {name}, just a quick reminder - we'd really appreciate a Google review when you get a moment: {reviewLink}",
+};
+
+let settingsCache = null;
+
+function getSettings() {
+  if (!settingsCache) settingsCache = { ...DEFAULT_SETTINGS, ...readJson(PATHS.settings, {}) };
+  return settingsCache;
+}
+
+function updateSettings(patch) {
+  settingsCache = { ...getSettings(), ...patch };
+  writeJson(PATHS.settings, settingsCache);
+  sheets.syncSettings(settingsCache); // fire-and-forget background mirror
+  return settingsCache;
+}
+
+/* ---------------- Leads ---------------- */
+
+let leadsCache = null;
+
+function loadLeads() {
+  if (!leadsCache) leadsCache = readJson(PATHS.leads, {}); // { [phone]: leadObject }
+  return leadsCache;
+}
+
+function saveLeads() {
+  writeJson(PATHS.leads, leadsCache);
+}
+
+function getLead(phone) {
+  return loadLeads()[phone] || null;
+}
+
+function upsertLead(phone, fields) {
+  const leads = loadLeads();
+  const existing = leads[phone] || {
+    phone,
+    name: '',
+    status: 'new',
+    carpetType: '',
+    room: '',
+    budget: '',
+    source: 'whatsapp',
+    createdAt: new Date().toISOString(),
+    lastContacted: '',
+    followupCount: 0,
+    reviewSent: false,
+    humanTakeover: false,
+  };
+  const updated = { ...existing, ...fields };
+  leads[phone] = updated;
+  saveLeads();
+  sheets.syncLead(updated); // fire-and-forget background mirror
+  return updated;
+}
+
+function getAllLeads() {
+  return Object.values(loadLeads()).sort(
+    (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+  );
+}
+
+function getLeadsNeedingFollowup() {
+  const { followupDelayHours, followupMaxAttempts } = getSettings();
+  const cutoffMs = followupDelayHours * 60 * 60 * 1000;
+  const now = Date.now();
+  return getAllLeads().filter((lead) => {
+    if (lead.status !== 'interested') return false;
+    if ((lead.followupCount || 0) >= followupMaxAttempts) return false;
+    const last = lead.lastContacted ? new Date(lead.lastContacted).getTime() : 0;
+    return now - last >= cutoffMs;
+  });
+}
+
+function getLeadsAwaitingReview() {
+  return getAllLeads().filter((lead) => lead.status === 'completed' && lead.reviewSent !== true);
+}
+
+/** Leads already asked for a review, but no reminder sent yet (or due for another one). */
+function getLeadsNeedingReviewReminder() {
+  const { reviewReminderDelayHours, reviewReminderMaxAttempts } = getSettings();
+  const cutoffMs = reviewReminderDelayHours * 60 * 60 * 1000;
+  const now = Date.now();
+  return getAllLeads().filter((lead) => {
+    if (!lead.reviewSent) return false;
+    if ((lead.reviewReminderCount || 0) >= reviewReminderMaxAttempts) return false;
+    const last = lead.reviewRequestedAt ? new Date(lead.reviewRequestedAt).getTime() : 0;
+    return now - last >= cutoffMs;
+  });
+}
+
+function setTakeover(phone, humanTakeover) {
+  return upsertLead(phone, { humanTakeover: Boolean(humanTakeover) });
+}
+
+const WEEKDAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Next available free-measure slots, skipping any already booked by another
+ * lead. Looks ahead up to 21 days, only on the business's configured open
+ * days, offering a Morning and Afternoon slot per open day, until it has
+ * enough to show (or runs out of days to look at).
+ */
+function getAvailableSlots(count = 6) {
+  const { openDays } = getSettings();
+  const takenSlots = new Set(
+    getAllLeads()
+      .filter((lead) => lead.bookingSlot)
+      .map((lead) => lead.bookingSlot)
+  );
+
+  const slots = [];
+  for (let daysAhead = 1; daysAhead <= 21 && slots.length < count; daysAhead++) {
+    const date = new Date();
+    date.setDate(date.getDate() + daysAhead);
+    const weekday = WEEKDAY_ABBR[date.getDay()];
+    if (!openDays.includes(weekday)) continue;
+
+    const label = `${weekday} ${date.getDate()} ${MONTH_ABBR[date.getMonth()]}`;
+    for (const part of ['Morning', 'Afternoon']) {
+      const slot = `${label} - ${part}`;
+      if (!takenSlots.has(slot)) slots.push(slot);
+      if (slots.length >= count) break;
+    }
+  }
+  return slots;
+}
+
+/* ---------------- Messages (chat transcripts) ---------------- */
+
+let messagesCache = null;
+
+function loadMessages() {
+  if (!messagesCache) messagesCache = readJson(PATHS.messages, {}); // { [phone]: [{role,text,timestamp}] }
+  return messagesCache;
+}
+
+function saveMessages() {
+  writeJson(PATHS.messages, messagesCache);
+}
+
+function logMessage(phone, role, text) {
+  const messages = loadMessages();
+  if (!messages[phone]) messages[phone] = [];
+  const entry = { role, text, timestamp: new Date().toISOString() };
+  messages[phone].push(entry);
+  // Cap history per lead so the file doesn't grow unbounded on a long-running bot
+  if (messages[phone].length > 500) messages[phone] = messages[phone].slice(-500);
+  saveMessages();
+  sheets.syncMessage(phone, entry); // fire-and-forget background mirror
+  return entry;
+}
+
+function getMessages(phone) {
+  return loadMessages()[phone] || [];
+}
+
+/** Leads plus their last message - powers the dashboard chat list. */
+function getChats() {
+  const messages = loadMessages();
+  return getAllLeads().map((lead) => {
+    const thread = messages[lead.phone] || [];
+    const last = thread[thread.length - 1];
+    return { ...lead, lastMessage: last?.text || '', lastMessageAt: last?.timestamp || lead.lastContacted };
+  });
+}
+
+module.exports = {
+  DATA_DIR,
+  getSettings,
+  updateSettings,
+  getLead,
+  upsertLead,
+  getAllLeads,
+  getLeadsNeedingFollowup,
+  getLeadsAwaitingReview,
+  getLeadsNeedingReviewReminder,
+  setTakeover,
+  getAvailableSlots,
+  logMessage,
+  getMessages,
+  getChats,
+};

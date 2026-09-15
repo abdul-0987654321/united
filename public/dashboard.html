@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KSC Carpets - Leads Dashboard</title>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; background: #f5f4f0; margin: 0; padding: 24px; color: #222; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #666; font-size: 13px; margin-bottom: 20px; }
+  .filters { margin-bottom: 12px; display: flex; gap: 8px; }
+  .filters button { padding: 6px 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .filters button.active { background: #222; color: #fff; border-color: #222; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  th, td { text-align: left; padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #eee; }
+  th { background: #fafafa; font-weight: 600; color: #555; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .badge.new { background: #e6f0ff; color: #1a56b0; }
+  .badge.interested { background: #e6f7ec; color: #1a7a3d; }
+  .badge.not_interested { background: #fdeaea; color: #a5342f; }
+  .badge.booked { background: #fff4e0; color: #a56b0c; }
+  .badge.completed { background: #eee; color: #555; }
+  .empty { padding: 40px; text-align: center; color: #888; }
+  .refresh { font-size: 12px; color: #888; margin-left: auto; }
+  .panel { background: #fff; border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
+  .panel-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #888; margin: 0 0 12px; }
+  .panel-row { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; flex-wrap: wrap; }
+  .panel-row:last-child { margin-bottom: 0; }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-dot.connected { background: #2e9e4c; }
+  .status-dot.disconnected { background: #c94b3f; }
+  .status-dot.connecting { background: #c9963f; }
+  .status-text { font-size: 13px; font-weight: 600; }
+  .switch { position: relative; width: 38px; height: 21px; display: inline-block; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: #ccc; border-radius: 22px; cursor: pointer; transition: .2s; }
+  .slider:before { content: ""; position: absolute; height: 15px; width: 15px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  .switch input:checked + .slider { background: #2e9e4c; }
+  .switch input:checked + .slider:before { transform: translateX(17px); }
+  .toggle-label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  textarea { width: 100%; box-sizing: border-box; font-family: inherit; font-size: 13px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; min-height: 56px; }
+  .field-label { font-size: 12px; font-weight: 600; color: #555; display: block; margin-bottom: 5px; }
+  input[type="number"] { width: 64px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+  .save-btn { padding: 7px 14px; border: none; background: #222; color: #fff; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .save-btn.danger { background: #a5342f; }
+  .save-btn:disabled { opacity: 0.5; cursor: default; }
+  .saved-note { font-size: 12px; color: #2e9e4c; }
+  .day-picker { display: flex; gap: 6px; }
+  .day-chip { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fafafa; color: #888; user-select: none; }
+  .day-chip.active { background: #222; color: #fff; border-color: #222; }
+  .qr-box { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 4px; }
+  .qr-box p { font-size: 12px; color: #666; margin: 0; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tabs button { padding: 8px 16px; border: none; background: transparent; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; color: #666; }
+  .tabs button.active { border-bottom-color: #222; color: #222; font-weight: 600; }
+  .chat-layout { display: flex; gap: 16px; height: 560px; }
+  .chat-list { width: 280px; background: #fff; border-radius: 8px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .chat-list-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+  .chat-list-item:hover { background: #fafafa; }
+  .chat-list-item.active { background: #eef4ff; }
+  .chat-list-item .name { font-size: 13px; font-weight: 600; }
+  .chat-list-item .preview { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-panel { flex: 1; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; }
+  .chat-header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 12px; }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 70%; padding: 8px 12px; border-radius: 10px; font-size: 13px; }
+  .msg.user { align-self: flex-start; background: #f0f0f0; }
+  .msg.assistant { align-self: flex-end; background: #e6f7ec; }
+  .msg.human { align-self: flex-end; background: #fff4e0; }
+  .msg .role-label { font-size: 10px; color: #999; margin-bottom: 2px; }
+  .chat-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #eee; }
+  .chat-input input { flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+  .chat-input button { padding: 8px 16px; border: none; background: #222; color: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .chat-input:disabled, .chat-input.disabled input, .chat-input.disabled button { opacity: 0.5; }
+  .takeover-note { font-size: 11px; color: #888; padding: 0 12px 10px; }
+</style>
+</head>
+<body>
+  <h1>KSC Carpets - Leads</h1>
+  <div class="sub">WhatsApp enquiries, auto-updated and answered by AI.</div>
+
+  <div class="panel">
+    <p class="panel-title">Connection</p>
+    <div class="panel-row">
+      <span><span class="status-dot" id="statusDot"></span><span class="status-text" id="statusText">Checking...</span></span>
+      <button class="save-btn danger" id="relinkBtn" style="margin-left:auto;">Relink WhatsApp</button>
+    </div>
+    <div class="qr-box" id="qrRow" style="display:none">
+      <p>Scan with WhatsApp on the KSC Carpets phone: Settings &gt; Linked Devices &gt; Link a Device</p>
+      <img id="qrImage" style="width:200px; height:200px; border:1px solid #ddd; border-radius:8px;">
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Bot controls</p>
+    <div class="panel-row">
+      <label class="toggle-label">
+        <span class="switch"><input type="checkbox" id="botEnabledToggle"><span class="slider"></span></span>
+        Automated replies
+      </label>
+      <label class="toggle-label">
+        <span class="switch"><input type="checkbox" id="followupEnabledToggle"><span class="slider"></span></span>
+        Follow-ups
+      </label>
+      <button class="save-btn" id="runNowBtn" style="margin-left:auto;">Send follow-ups / reviews now</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Business hours</p>
+    <div class="panel-row">
+      <div>
+        <span class="field-label">Days free measures can be booked on</span>
+        <div class="day-picker" id="dayPicker">
+          <span class="day-chip" data-day="Mon">Mon</span>
+          <span class="day-chip" data-day="Tue">Tue</span>
+          <span class="day-chip" data-day="Wed">Wed</span>
+          <span class="day-chip" data-day="Thu">Thu</span>
+          <span class="day-chip" data-day="Fri">Fri</span>
+          <span class="day-chip" data-day="Sat">Sat</span>
+          <span class="day-chip" data-day="Sun">Sun</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Follow-up settings</p>
+    <div class="panel-row" style="display:block">
+      <span class="field-label">Follow-up message (use {name} for the customer's name)</span>
+      <textarea id="followupMessage"></textarea>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Review reminder</p>
+    <div class="panel-row">
+      <label class="toggle-label">
+        <span class="switch"><input type="checkbox" id="reviewReminderToggle"><span class="slider"></span></span>
+        Send a reminder if no reply to the review request
+      </label>
+    </div>
+    <div class="panel-row" style="display:block">
+      <span class="field-label">Reminder message (use {name} and {reviewLink})</span>
+      <textarea id="reviewReminderMessage"></textarea>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-row">
+      <button class="save-btn" id="saveSettingsBtn">Save settings</button>
+      <span class="saved-note" id="savedNote" style="display:none">Saved</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button data-tab="leads" class="active">Leads</button>
+    <button data-tab="chats">Chats</button>
+  </div>
+
+  <div id="leadsView">
+  <div class="filters" id="filters">
+    <button data-filter="all" class="active">All</button>
+    <button data-filter="new">New</button>
+    <button data-filter="interested">Interested</button>
+    <button data-filter="booked">Booked</button>
+    <button data-filter="completed">Completed</button>
+    <button data-filter="not_interested">Not interested</button>
+    <span class="refresh" id="refreshLabel"></span>
+  </div>
+
+  <table id="table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Phone</th>
+        <th>Status</th>
+        <th>Carpet</th>
+        <th>Room</th>
+        <th>Budget</th>
+        <th>Last contacted</th>
+        <th>Change status</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="empty" id="empty" style="display:none">No leads yet.</div>
+  </div>
+
+  <div id="chatsView" style="display:none">
+    <div class="chat-layout">
+      <div class="chat-list" id="chatList"></div>
+      <div class="chat-panel">
+        <div class="chat-header" id="chatHeader">
+          <span id="chatHeaderName" style="font-size:14px; font-weight:600;">Select a conversation</span>
+          <label class="toggle-label" style="margin-left:auto; display:none;" id="takeoverLabel">
+            <span class="switch">
+              <input type="checkbox" id="takeoverToggle">
+              <span class="slider"></span>
+            </span>
+            I'm replying manually
+          </label>
+        </div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="takeover-note" id="takeoverNote" style="display:none">AI is paused for this chat - your replies here go straight to the customer.</div>
+        <div class="chat-input">
+          <input type="text" id="chatInput" placeholder="Type a message...">
+          <button id="chatSendBtn">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+let allLeads = [];
+let activeFilter = 'all';
+
+async function loadLeads() {
+  const res = await fetch('/api/leads');
+  if (!res.ok) return;
+  allLeads = await res.json();
+  render();
+  document.getElementById('refreshLabel').textContent =
+    'Updated ' + new Date().toLocaleTimeString();
+}
+
+function render() {
+  const rows = document.getElementById('rows');
+  const empty = document.getElementById('empty');
+  const filtered = activeFilter === 'all'
+    ? allLeads
+    : allLeads.filter(l => l.status === activeFilter);
+
+  rows.innerHTML = '';
+  empty.style.display = filtered.length ? 'none' : 'block';
+
+  for (const lead of filtered) {
+    const tr = document.createElement('tr');
+    const status = lead.status || 'new';
+    const lastContacted = lead.lastContacted
+      ? new Date(lead.lastContacted).toLocaleString()
+      : '';
+    tr.innerHTML = `
+      <td>${escapeHtml(lead.name || '-')}</td>
+      <td>${escapeHtml(lead.phone || '-')}</td>
+      <td><span class="badge ${status}">${status.replace('_',' ')}</span></td>
+      <td>${escapeHtml(lead.carpetType || '-')}</td>
+      <td>${escapeHtml(lead.room || '-')}</td>
+      <td>${escapeHtml(lead.budget || '-')}</td>
+      <td>${lastContacted}</td>
+      <td>
+        <select data-phone="${escapeHtml(lead.phone)}" class="status-select">
+          <option value="new" ${status === 'new' ? 'selected' : ''}>New</option>
+          <option value="interested" ${status === 'interested' ? 'selected' : ''}>Interested</option>
+          <option value="booked" ${status === 'booked' ? 'selected' : ''}>Booked</option>
+          <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
+          <option value="not_interested" ${status === 'not_interested' ? 'selected' : ''}>Not interested</option>
+        </select>
+      </td>
+    `;
+    tr.querySelector('.status-select').addEventListener('change', async (e) => {
+      await fetch('/api/leads/' + encodeURIComponent(lead.phone) + '/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: e.target.value }),
+      });
+      loadLeads();
+    });
+    rows.appendChild(tr);
+  }
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+document.getElementById('filters').addEventListener('click', (e) => {
+  if (e.target.tagName !== 'BUTTON') return;
+  document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  activeFilter = e.target.dataset.filter;
+  render();
+});
+
+async function loadStatus() {
+  const res = await fetch('/api/status');
+  if (!res.ok) return;
+  const { whatsapp, qr } = await res.json();
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  dot.className = 'status-dot ' + whatsapp;
+  text.textContent = 'WhatsApp: ' + whatsapp;
+
+  const qrRow = document.getElementById('qrRow');
+  if (qr && whatsapp !== 'connected') {
+    qrRow.style.display = 'flex';
+    document.getElementById('qrImage').src = qr;
+  } else {
+    qrRow.style.display = 'none';
+  }
+}
+
+document.getElementById('runNowBtn').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  e.target.textContent = 'Running...';
+  await fetch('/api/run-now', { method: 'POST' });
+  e.target.textContent = 'Done - check leads/WhatsApp';
+  setTimeout(() => { e.target.disabled = false; e.target.textContent = 'Send follow-ups / reviews now'; loadLeads(); }, 2000);
+});
+
+document.getElementById('relinkBtn').addEventListener('click', async (e) => {
+  if (!confirm('This disconnects the current WhatsApp session and asks you to scan a new QR code. Continue?')) return;
+  e.target.disabled = true;
+  e.target.textContent = 'Relinking...';
+  await fetch('/api/whatsapp/relink', { method: 'POST' });
+  setTimeout(() => {
+    e.target.disabled = false;
+    e.target.textContent = 'Relink WhatsApp';
+    loadStatus();
+  }, 2000);
+});
+
+let currentSettings = {};
+let selectedDays = [];
+
+function renderDayPicker() {
+  document.querySelectorAll('.day-chip').forEach((chip) => {
+    chip.classList.toggle('active', selectedDays.includes(chip.dataset.day));
+  });
+}
+
+document.getElementById('dayPicker').addEventListener('click', (e) => {
+  const chip = e.target.closest('.day-chip');
+  if (!chip) return;
+  const day = chip.dataset.day;
+  selectedDays = selectedDays.includes(day) ? selectedDays.filter(d => d !== day) : [...selectedDays, day];
+  renderDayPicker();
+  // Not saved yet - takes effect when "Save settings" is clicked, same as everything else here.
+});
+
+async function loadSettings() {
+  const res = await fetch('/api/settings');
+  if (!res.ok) return;
+  currentSettings = await res.json();
+  document.getElementById('botEnabledToggle').checked = currentSettings.botEnabled !== false;
+  document.getElementById('followupEnabledToggle').checked = currentSettings.followupEnabled !== false;
+  document.getElementById('followupMessage').value = currentSettings.followupMessage || '';
+  document.getElementById('reviewReminderToggle').checked = currentSettings.reviewReminderEnabled !== false;
+  document.getElementById('reviewReminderMessage').value = currentSettings.reviewReminderMessage || '';
+  selectedDays = currentSettings.openDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  renderDayPicker();
+}
+
+async function saveSettings(partial) {
+  const res = await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(partial),
+  });
+  if (res.ok) {
+    currentSettings = await res.json();
+    const note = document.getElementById('savedNote');
+    note.style.display = 'inline';
+    setTimeout(() => { note.style.display = 'none'; }, 1500);
+  }
+}
+
+// One button saves everything on this page - toggles and the day picker no
+// longer save the instant you touch them, so nothing goes live half-edited.
+document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+  saveSettings({
+    botEnabled: document.getElementById('botEnabledToggle').checked,
+    followupEnabled: document.getElementById('followupEnabledToggle').checked,
+    followupMessage: document.getElementById('followupMessage').value,
+    reviewReminderEnabled: document.getElementById('reviewReminderToggle').checked,
+    reviewReminderMessage: document.getElementById('reviewReminderMessage').value,
+    openDays: selectedDays,
+  });
+});
+
+document.querySelectorAll('.tabs button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    document.getElementById('leadsView').style.display = tab === 'leads' ? '' : 'none';
+    document.getElementById('chatsView').style.display = tab === 'chats' ? '' : 'none';
+    if (tab === 'chats') loadChats();
+  });
+});
+
+let allChats = [];
+let activeChatPhone = null;
+
+async function loadChats() {
+  const res = await fetch('/api/chats');
+  if (!res.ok) return;
+  allChats = await res.json();
+  renderChatList();
+}
+
+function renderChatList() {
+  const list = document.getElementById('chatList');
+  list.innerHTML = '';
+  for (const chat of allChats) {
+    const div = document.createElement('div');
+    div.className = 'chat-list-item' + (chat.phone === activeChatPhone ? ' active' : '');
+    div.innerHTML = `
+      <div class="name">${escapeHtml(chat.name || chat.phone)}</div>
+      <div class="preview">${escapeHtml(chat.lastMessage || 'No messages yet')}</div>
+    `;
+    div.addEventListener('click', () => openChat(chat.phone));
+    list.appendChild(div);
+  }
+}
+
+async function openChat(phone) {
+  activeChatPhone = phone;
+  renderChatList();
+  const chat = allChats.find(c => c.phone === phone);
+  document.getElementById('chatHeaderName').textContent = chat?.name || phone;
+  document.getElementById('takeoverLabel').style.display = 'flex';
+  document.getElementById('takeoverToggle').checked = chat?.humanTakeover === true;
+  updateTakeoverNote(chat?.humanTakeover === true);
+
+  const res = await fetch('/api/chats/' + encodeURIComponent(phone) + '/messages');
+  const messages = res.ok ? await res.json() : [];
+  const box = document.getElementById('chatMessages');
+  box.innerHTML = messages.map(m => `
+    <div class="msg ${m.role}">
+      <div class="role-label">${m.role === 'user' ? (chat?.name || 'Customer') : (m.role === 'human' ? 'You' : 'AI')}</div>
+      ${escapeHtml(m.text)}
+    </div>
+  `).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function updateTakeoverNote(isTakeover) {
+  document.getElementById('takeoverNote').style.display = isTakeover ? 'block' : 'none';
+}
+
+document.getElementById('takeoverToggle').addEventListener('change', async (e) => {
+  if (!activeChatPhone) return;
+  const humanTakeover = e.target.checked;
+  updateTakeoverNote(humanTakeover);
+  await fetch('/api/chats/' + encodeURIComponent(activeChatPhone) + '/takeover', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ humanTakeover }),
+  });
+  loadChats();
+});
+
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || !activeChatPhone) return;
+  input.value = '';
+  await fetch('/api/chats/' + encodeURIComponent(activeChatPhone) + '/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  openChat(activeChatPhone);
+}
+
+document.getElementById('chatSendBtn').addEventListener('click', sendChatMessage);
+document.getElementById('chatInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendChatMessage();
+});
+
+setInterval(() => {
+  if (document.getElementById('chatsView').style.display !== 'none') {
+    loadChats();
+    if (activeChatPhone) openChat(activeChatPhone);
+  }
+}, 8000);
+
+loadStatus();
+loadSettings();
+setInterval(loadStatus, 4000);
+
+loadLeads();
+setInterval(loadLeads, 30000); // refresh every 30s
+</script>
+</body>
+</html>

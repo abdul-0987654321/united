@@ -1,0 +1,764 @@
+{
+  "182296246239236": [
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T15:11:56.588Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I’m your assistant from KSC Carpets. What’s your first name?",
+      "timestamp": "2026-09-15T15:12:17.231Z"
+    },
+    {
+      "role": "human",
+      "text": "her",
+      "timestamp": "2026-09-15T15:17:58.273Z"
+    },
+    {
+      "role": "human",
+      "text": "hi",
+      "timestamp": "2026-09-15T15:33:24.403Z"
+    },
+    {
+      "role": "user",
+      "text": "User",
+      "timestamp": "2026-09-15T15:34:53.531Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I'm your KSC Carpets assistant. What's your first name?",
+      "timestamp": "2026-09-15T15:34:57.691Z"
+    },
+    {
+      "role": "user",
+      "text": "User",
+      "timestamp": "2026-09-15T15:35:06.468Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi again! Could you share your first name with me? I'd love to help you find the perfect carpet!",
+      "timestamp": "2026-09-15T15:35:12.470Z"
+    },
+    {
+      "role": "user",
+      "text": "Abdr",
+      "timestamp": "2026-09-15T15:35:20.952Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Nice to meet you, Abdr! What kind of carpet or flooring are you looking for? Which room(s) do you need it for?",
+      "timestamp": "2026-09-15T15:35:26.973Z"
+    },
+    {
+      "role": "user",
+      "text": "Tv room flooring",
+      "timestamp": "2026-09-15T15:35:44.217Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Great choice! What type of flooring are you considering for your TV room? Do you have a budget in mind?",
+      "timestamp": "2026-09-15T15:35:53.363Z"
+    },
+    {
+      "role": "user",
+      "text": "50000",
+      "timestamp": "2026-09-15T15:36:02.648Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Thanks for sharing your budget, Abdr! We can definitely find some great options for your TV room around that. Would you like to schedule a free measure and quote visit?",
+      "timestamp": "2026-09-15T15:36:05.510Z"
+    },
+    {
+      "role": "user",
+      "text": "Yes, schedule",
+      "timestamp": "2026-09-15T15:36:12.060Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Fantastic! When would you like us to come by for the measurement?",
+      "timestamp": "2026-09-15T15:36:14.434Z"
+    },
+    {
+      "role": "user",
+      "text": "This week",
+      "timestamp": "2026-09-15T15:36:25.037Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Could you please let me know what day and time works best for you this week?",
+      "timestamp": "2026-09-15T15:36:27.579Z"
+    },
+    {
+      "role": "user",
+      "text": "Friday 2pn",
+      "timestamp": "2026-09-15T15:36:42.459Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I've scheduled your free measure for Friday at 2 PM. Looking forward to helping you with your TV room flooring!",
+      "timestamp": "2026-09-15T15:36:45.866Z"
+    }
+  ],
+  "32418429980859": [
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T15:14:36.997Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hey there! I'm your KSC Carpets assistant. What's your first name?",
+      "timestamp": "2026-09-15T15:14:42.182Z"
+    },
+    {
+      "role": "user",
+      "text": "Ahsan",
+      "timestamp": "2026-09-15T15:14:58.157Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Nice to meet you, Ahsan! What type of carpet or flooring are you looking for? And which room are you planning to install it in?",
+      "timestamp": "2026-09-15T15:14:59.761Z"
+    },
+    {
+      "role": "user",
+      "text": "Carpet and want to install in living room",
+      "timestamp": "2026-09-15T15:15:20.574Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Great choice! Do you have a rough budget in mind for the carpet?",
+      "timestamp": "2026-09-15T15:15:26.368Z"
+    },
+    {
+      "role": "user",
+      "text": "10000",
+      "timestamp": "2026-09-15T15:15:40.348Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Thank you for sharing that, Ahsan! We'd love to help you find the perfect carpet for your living room. We can arrange a free measurement and quote visit if you're interested. Would you like to schedule that?",
+      "timestamp": "2026-09-15T15:15:44.377Z"
+    },
+    {
+      "role": "user",
+      "text": "Yes, schedule visit",
+      "timestamp": "2026-09-15T15:15:58.631Z"
+    },
+    {
+      "role": "assistant",
+      "text": "That's awesome! When would you like to have the visit? Please share a couple of time slots that work for you.",
+      "timestamp": "2026-09-15T15:16:00.851Z"
+    },
+    {
+      "role": "user",
+      "text": "Tomorrow 1pm",
+      "timestamp": "2026-09-15T15:16:19.311Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I've scheduled the visit for tomorrow at 1pm! Looking forward to helping you with your living room carpet, Ahsan. See you then!",
+      "timestamp": "2026-09-15T15:16:21.933Z"
+    },
+    {
+      "role": "human",
+      "text": "i  am here owner",
+      "timestamp": "2026-09-15T15:16:48.895Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T15:24:11.907Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T15:24:32.609Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T15:24:52.856Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hello! I'm your KSC Carpets assistant. What's your first name?",
+      "timestamp": "2026-09-15T15:24:57.175Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T19:56:26.917Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T19:56:45.882Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I'm from KSC Carpets. How can I help you today?",
+      "timestamp": "2026-09-15T19:56:48.748Z"
+    },
+    {
+      "role": "user",
+      "text": "I need carpet for gaming room",
+      "timestamp": "2026-09-15T19:57:07.938Z"
+    },
+    {
+      "role": "assistant",
+      "text": "That sounds great! What type of carpet are you thinking about for your gaming room?",
+      "timestamp": "2026-09-15T19:57:09.311Z"
+    },
+    {
+      "role": "user",
+      "text": "What type of carpet you have",
+      "timestamp": "2026-09-15T19:57:34.568Z"
+    },
+    {
+      "role": "assistant",
+      "text": "We have a variety of options including plush, loop pile, and saxony carpets. Do you have a specific style or colour in mind?",
+      "timestamp": "2026-09-15T19:57:36.198Z"
+    },
+    {
+      "role": "user",
+      "text": "Saxony",
+      "timestamp": "2026-09-15T19:57:52.574Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Saxony is a fantastic choice! Do you have a budget range in mind for the carpet?",
+      "timestamp": "2026-09-15T19:57:54.261Z"
+    },
+    {
+      "role": "user",
+      "text": "2000",
+      "timestamp": "2026-09-15T19:58:01.811Z"
+    },
+    {
+      "role": "assistant",
+      "text": "That's a good budget! Would you like me to arrange a free measure and quote visit? We have some slots available.",
+      "timestamp": "2026-09-15T19:58:03.549Z"
+    },
+    {
+      "role": "user",
+      "text": "Thu 17 Sep - Morning",
+      "timestamp": "2026-09-15T19:58:37.778Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Great choice! I've booked you in for a free measure on Thu 17 Sep - Morning. Looking forward to helping you with your carpet!",
+      "timestamp": "2026-09-15T19:58:39.389Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T19:59:38.151Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I'm here to help you with your carpet needs. How can I assist you today?",
+      "timestamp": "2026-09-15T19:59:40.742Z"
+    },
+    {
+      "role": "user",
+      "text": "Carpets for drawing room",
+      "timestamp": "2026-09-15T19:59:49.493Z"
+    },
+    {
+      "role": "assistant",
+      "text": "That sounds lovely! What type of carpet are you considering for your drawing room?",
+      "timestamp": "2026-09-15T19:59:51.134Z"
+    },
+    {
+      "role": "user",
+      "text": "Saxony",
+      "timestamp": "2026-09-15T19:59:58.719Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Saxony is a great choice for a drawing room! Do you have a budget in mind?",
+      "timestamp": "2026-09-15T19:59:59.954Z"
+    },
+    {
+      "role": "user",
+      "text": "58888",
+      "timestamp": "2026-09-15T20:00:04.911Z"
+    },
+    {
+      "role": "assistant",
+      "text": "That's a generous budget! Would you like to schedule a free measure and quote visit? We have some slots available.",
+      "timestamp": "2026-09-15T20:00:06.518Z"
+    },
+    {
+      "role": "user",
+      "text": "Aik sawal",
+      "timestamp": "2026-09-15T20:04:23.803Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Of course! What's your question?",
+      "timestamp": "2026-09-15T20:04:26.724Z"
+    },
+    {
+      "role": "user",
+      "text": "What is carpet",
+      "timestamp": "2026-09-15T20:04:34.724Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Carpet is a textile flooring material that's typically made of wool, nylon, or polyester. It adds warmth and comfort to a space while also enhancing its aesthetic. Do you have any specific features in mind for your drawing room?",
+      "timestamp": "2026-09-15T20:04:36.680Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T20:09:31.628Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hello! I'm here to help with your carpet needs. What's your name?",
+      "timestamp": "2026-09-15T20:09:34.352Z"
+    },
+    {
+      "role": "user",
+      "text": "Abduhkfyc",
+      "timestamp": "2026-09-15T20:09:47.995Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Nice to meet you, Abduhkfyc! What kind of carpet or flooring are you looking for and which room are you planning to put it in?",
+      "timestamp": "2026-09-15T20:09:51.392Z"
+    },
+    {
+      "role": "user",
+      "text": "Praying",
+      "timestamp": "2026-09-15T20:10:25.633Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I see! Are you looking for something in particular for your prayer room, like a specific type of carpet?",
+      "timestamp": "2026-09-15T20:10:27.333Z"
+    },
+    {
+      "role": "user",
+      "text": "Don't know",
+      "timestamp": "2026-09-15T20:10:37.445Z"
+    },
+    {
+      "role": "assistant",
+      "text": "No worries! We can help you find the perfect fit. Do you have a budget in mind, or should we just explore options together?",
+      "timestamp": "2026-09-15T20:10:39.725Z"
+    },
+    {
+      "role": "user",
+      "text": "200",
+      "timestamp": "2026-09-15T20:10:47.071Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Got it! A budget of £200 gives us some good options. How about I offer you a free measure and quote? We can figure out the best carpet for your prayer room then! Would you like to book a slot?",
+      "timestamp": "2026-09-15T20:10:48.737Z"
+    },
+    {
+      "role": "user",
+      "text": "Tue 22 Sep - Morning",
+      "timestamp": "2026-09-15T20:11:05.926Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I've got you down for a free measure and quote on Tue 22 Sep in the morning. We'll take it from there! Looking forward to helping you find the right carpet!",
+      "timestamp": "2026-09-15T20:11:07.372Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T20:20:10.761Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! How can I assist you today?",
+      "timestamp": "2026-09-15T20:20:13.200Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T20:21:32.248Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I'm from KSC Carpets. How can I help you today?",
+      "timestamp": "2026-09-15T20:21:34.175Z"
+    },
+    {
+      "role": "user",
+      "text": "Need help",
+      "timestamp": "2026-09-15T20:21:43.708Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Of course! What are you looking for assistance with?",
+      "timestamp": "2026-09-15T20:21:45.348Z"
+    }
+  ],
+  "214009982771329": [
+    {
+      "role": "user",
+      "text": "Wos",
+      "timestamp": "2026-09-15T15:18:49.968Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I'm your KSC Carpets assistant. What's your first name? 😊",
+      "timestamp": "2026-09-15T15:18:55.631Z"
+    },
+    {
+      "role": "user",
+      "text": "Ki hal h",
+      "timestamp": "2026-09-15T15:19:00.763Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I'm here to help! What's your name and what kind of flooring are you looking for?",
+      "timestamp": "2026-09-15T15:19:02.522Z"
+    },
+    {
+      "role": "user",
+      "text": "Ya kaya aya tha bata Muja",
+      "timestamp": "2026-09-15T15:19:14.491Z"
+    },
+    {
+      "role": "user",
+      "text": "Msj",
+      "timestamp": "2026-09-15T15:19:15.822Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Could you please share your name and what type of carpet or flooring you're interested in? 😊",
+      "timestamp": "2026-09-15T15:19:17.193Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I’m here to help you with carpets! What's your name and which room are you thinking about?",
+      "timestamp": "2026-09-15T15:19:17.230Z"
+    },
+    {
+      "role": "user",
+      "text": "😂",
+      "timestamp": "2026-09-15T15:19:28.523Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I'm glad to see you're smiling! 😄 Just let me know your name and what kind of flooring you need help with!",
+      "timestamp": "2026-09-15T15:19:33.560Z"
+    },
+    {
+      "role": "user",
+      "text": "Qureshi my name",
+      "timestamp": "2026-09-15T15:19:50.489Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Great to meet you, Qureshi! What type of carpet or flooring are you looking for, and which room is it for?",
+      "timestamp": "2026-09-15T15:19:52.502Z"
+    },
+    {
+      "role": "user",
+      "text": "Pakistan",
+      "timestamp": "2026-09-15T15:20:05.394Z"
+    },
+    {
+      "role": "assistant",
+      "text": "It sounds like you're not looking for carpet services right now. If you change your mind, feel free to reach out!",
+      "timestamp": "2026-09-15T15:20:07.357Z"
+    },
+    {
+      "role": "user",
+      "text": "😂😂😂😂🤣😂😂😂🤣😂🤣",
+      "timestamp": "2026-09-15T15:20:09.551Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Glad to see you're enjoying yourself! 😄 Is there something specific you want to chat about regarding carpets, or do you have a question in mind?",
+      "timestamp": "2026-09-15T15:20:11.005Z"
+    },
+    {
+      "role": "user",
+      "text": "Pagala mara dost k whatsapp pa kia kr ra ha 🤣",
+      "timestamp": "2026-09-15T15:20:25.850Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Haha, lagta hai aap maze mein hain! Agar aap carpets ki baat karna chahte hain, toh main yahan hoon! 😄",
+      "timestamp": "2026-09-15T15:20:30.505Z"
+    },
+    {
+      "role": "user",
+      "text": "Carpets kia hota",
+      "timestamp": "2026-09-15T15:20:44.169Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Carpets ek tarah ka flooring material hote hain, jo zameen par bichaye jate hain. Yeh ghar aur office dono jagah use hote hain aur comfort aur style dete hain! Kya aap kisi specific room ke liye carpet ki talash mein hain?",
+      "timestamp": "2026-09-15T15:20:45.881Z"
+    },
+    {
+      "role": "user",
+      "text": "Nai ya no mere dost ka ha tum carpets q beach ray 🤣",
+      "timestamp": "2026-09-15T15:21:08.798Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Haha, samajh gaya! Aapke dost ki taraf se bhi koi carpets ka sawaal aaya ho toh bata sakte hain! 😄",
+      "timestamp": "2026-09-15T15:21:10.899Z"
+    },
+    {
+      "role": "user",
+      "text": "Ok",
+      "timestamp": "2026-09-15T15:22:04.103Z"
+    },
+    {
+      "role": "user",
+      "text": "Kb jana",
+      "timestamp": "2026-09-15T15:22:13.381Z"
+    },
+    {
+      "role": "user",
+      "text": "Khr ha ma khalaoga chips",
+      "timestamp": "2026-09-15T15:22:45.959Z"
+    },
+    {
+      "role": "user",
+      "text": "😁",
+      "timestamp": "2026-09-15T15:25:39.794Z"
+    },
+    {
+      "role": "user",
+      "text": "🥲",
+      "timestamp": "2026-09-15T15:25:40.474Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I’m your friendly assistant from KSC Carpets. What's your name? 😊",
+      "timestamp": "2026-09-15T15:25:43.792Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I'm from KSC Carpets. What's your first name? 😊",
+      "timestamp": "2026-09-15T15:25:43.810Z"
+    },
+    {
+      "role": "user",
+      "text": "O phudi dy ki va",
+      "timestamp": "2026-09-15T15:26:10.650Z"
+    },
+    {
+      "role": "user",
+      "text": "🥲🤣🤣🤣🤣",
+      "timestamp": "2026-09-15T15:26:15.251Z"
+    },
+    {
+      "role": "user",
+      "text": "😂🤣🤣🤣🤣🤣🤣",
+      "timestamp": "2026-09-15T15:26:18.076Z"
+    },
+    {
+      "role": "user",
+      "text": "Yar kia bakchodi h",
+      "timestamp": "2026-09-15T15:26:40.848Z"
+    }
+  ],
+  "279881761980667": [
+    {
+      "role": "user",
+      "text": "Le estoy pidiendo a la empresa que trabajamos que me pase para conectarnos mediante API",
+      "timestamp": "2026-09-15T18:46:21.353Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hola, soy el asistente de KSC Carpets. ¿Me puedes dar tu nombre? Si necesitas información sobre alfombras o suelos, estaré encantado de ayudar.",
+      "timestamp": "2026-09-15T18:46:25.756Z"
+    },
+    {
+      "role": "user",
+      "text": "Abdul?",
+      "timestamp": "2026-09-15T18:47:59.356Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Gracias, Abdul! ¿Qué tipo de alfombra o suelo estás buscando? ¿Es para alguna habitación en particular?",
+      "timestamp": "2026-09-15T18:48:01.098Z"
+    }
+  ],
+  "150375495651422": [
+    {
+      "role": "user",
+      "text": "Hu",
+      "timestamp": "2026-09-15T19:54:04.524Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I'm from KSC Carpets. How can I help you today?",
+      "timestamp": "2026-09-15T19:54:08.684Z"
+    },
+    {
+      "role": "user",
+      "text": "Please send the payment screenshot as an image so we can verify it 🙏",
+      "timestamp": "2026-09-15T19:54:09.372Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I think you might have the wrong number. I can help with carpet queries if you need!",
+      "timestamp": "2026-09-15T19:54:10.858Z"
+    },
+    {
+      "role": "user",
+      "text": "Please send the payment screenshot as an image so we can verify it 🙏",
+      "timestamp": "2026-09-15T19:54:11.248Z"
+    },
+    {
+      "role": "assistant",
+      "text": "It seems you might be in the wrong chat. I'm here to help with flooring needs! Let me know if you're looking for carpets or something else.",
+      "timestamp": "2026-09-15T19:54:12.713Z"
+    },
+    {
+      "role": "user",
+      "text": "Please send the payment screenshot as an image so we can verify it 🙏",
+      "timestamp": "2026-09-15T19:54:13.105Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I can't help with payments or screenshots, but if you need flooring advice or help, feel free to ask!",
+      "timestamp": "2026-09-15T19:54:14.655Z"
+    },
+    {
+      "role": "user",
+      "text": "Please send the payment screenshot as an image so we can verify it 🙏",
+      "timestamp": "2026-09-15T19:54:15.046Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I can't assist with payments or screenshots here. If you have any carpet queries, I'm all ears!",
+      "timestamp": "2026-09-15T19:54:16.267Z"
+    },
+    {
+      "role": "user",
+      "text": "Please send the payment screenshot as an image so we can verify it 🙏",
+      "timestamp": "2026-09-15T19:54:16.655Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I'm sorry, but I can't help with that. If you're looking for carpets or flooring, I'm here to assist!",
+      "timestamp": "2026-09-15T19:54:18.226Z"
+    },
+    {
+      "role": "user",
+      "text": "Please send the payment screenshot as an image so we can verify it 🙏",
+      "timestamp": "2026-09-15T19:54:18.734Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T21:17:17.050Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I'm from KSC Carpets. How can I help you today?",
+      "timestamp": "2026-09-15T21:17:19.830Z"
+    },
+    {
+      "role": "user",
+      "text": "I need carpet for living dining room",
+      "timestamp": "2026-09-15T21:17:43.906Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Great choice! Do you have a specific carpet style in mind? Also, what's your budget like?",
+      "timestamp": "2026-09-15T21:17:45.877Z"
+    },
+    {
+      "role": "user",
+      "text": "Budget is 50000 and no style you can suggest me",
+      "timestamp": "2026-09-15T21:18:04.345Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Thanks for sharing your budget! We have a range of styles that would fit beautifully in a living dining room. How about a free measure and quote visit? We can discuss styles then too! ",
+      "timestamp": "2026-09-15T21:18:06.470Z"
+    },
+    {
+      "role": "user",
+      "text": "First tell me what type of style so I decide",
+      "timestamp": "2026-09-15T21:18:25.626Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Sure! Popular styles include plush carpets for a cozy feel, loop pile for durability, and saxony for a luxurious look. What do you think would suit your space best?",
+      "timestamp": "2026-09-15T21:18:26.962Z"
+    },
+    {
+      "role": "user",
+      "text": "Plush",
+      "timestamp": "2026-09-15T21:18:38.113Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Plush carpets are a lovely choice! Would you like to book a free measure visit? I have slots available on Thu 17 Sep, Fri 18 Sep, or Mon 21 Sep.",
+      "timestamp": "2026-09-15T21:18:40.289Z"
+    },
+    {
+      "role": "user",
+      "text": "Mon 21 Sep - Afternoon",
+      "timestamp": "2026-09-15T21:18:43.854Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I've got you down for a free measure on Mon 21 Sep - Afternoon! I'll confirm the details shortly. Looking forward to helping you with your new plush carpet!",
+      "timestamp": "2026-09-15T21:18:45.202Z"
+    },
+    {
+      "role": "user",
+      "text": "Stop",
+      "timestamp": "2026-09-15T21:27:22.720Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Got it! I won't reach out again. If you ever need anything, feel free to message us. Take care!",
+      "timestamp": "2026-09-15T21:27:24.261Z"
+    },
+    {
+      "role": "human",
+      "text": "hi",
+      "timestamp": "2026-09-15T21:29:27.223Z"
+    },
+    {
+      "role": "human",
+      "text": "i am owner",
+      "timestamp": "2026-09-15T21:29:40.290Z"
+    },
+    {
+      "role": "user",
+      "text": "Yes",
+      "timestamp": "2026-09-15T21:29:49.827Z"
+    },
+    {
+      "role": "user",
+      "text": "Hi",
+      "timestamp": "2026-09-15T21:35:39.458Z"
+    }
+  ],
+  "183764755984449": [
+    {
+      "role": "user",
+      "text": "Like this",
+      "timestamp": "2026-09-15T20:27:13.519Z"
+    },
+    {
+      "role": "assistant",
+      "text": "Hi there! I'm from KSC Carpets. How can I help you today?",
+      "timestamp": "2026-09-15T20:27:16.023Z"
+    }
+  ]
+}
