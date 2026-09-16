@@ -100,8 +100,19 @@ function pushHistory(phone, role, content) {
   return history;
 }
 
-function statusFromIntent(intent, currentStatus) {
+/**
+ * A lead moves through: new -> interested -> booked -> completed.
+ * "booked" fires automatically once the required qualifying info is in
+ * (name, carpet type, room, and a budget or preferred time) - this is the
+ * dashboard's "Booked" column, and staff move it to "completed" by hand
+ * once the job is actually done (that's what triggers the review request).
+ * A lead already marked booked/completed never gets silently downgraded
+ * back to "interested" just because a later message lacked some detail.
+ */
+function computeStatus({ intent, currentStatus, hasRequiredInfo }) {
   if (intent === 'not_interested') return 'not_interested';
+  if (currentStatus === 'booked' || currentStatus === 'completed') return currentStatus;
+  if (hasRequiredInfo) return 'booked';
   if (intent === 'interested') return 'interested';
   return currentStatus || 'new';
 }
@@ -179,7 +190,8 @@ async function handleIncomingMessage(msg) {
   const budget = ai.budget || lead?.budget || '';
   const preferredTime = ai.preferredTime || lead?.preferredTime || '';
   const name = ai.name || lead?.name || pushName;
-  const status = statusFromIntent(ai.intent, lead?.status);
+  const hasRequiredInfo = Boolean(name && carpetType && room && (budget || preferredTime));
+  const status = computeStatus({ intent: ai.intent, currentStatus: lead?.status, hasRequiredInfo });
 
   const updatedLead = store.upsertLead(phone, {
     jid, // remember the real address - may be @lid, not always @s.whatsapp.net
@@ -197,8 +209,7 @@ async function handleIncomingMessage(msg) {
   });
 
   // Notify the admin once, the first time this enquiry has enough to act on.
-  const looksComplete = carpetType && room && (budget || preferredTime);
-  if (looksComplete && status !== 'not_interested' && !updatedLead.adminNotified) {
+  if (hasRequiredInfo && status !== 'not_interested' && !updatedLead.adminNotified) {
     notifyAdmin(updatedLead);
     store.upsertLead(phone, { adminNotified: true });
   }
