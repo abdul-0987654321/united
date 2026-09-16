@@ -37,6 +37,14 @@ function readAuthFolderAsChunks() {
 /** Backs up the current session to the Google Sheet - best-effort, never blocks anything. */
 async function backupSessionToSheet() {
   try {
+    const credsPath = path.join(config.authDir, 'creds.json');
+    if (!fs.existsSync(credsPath)) return;
+    const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+    if (creds.registered !== true) {
+      console.log('Session not fully registered yet - skipping backup for now.');
+      return;
+    }
+
     const chunks = readAuthFolderAsChunks();
     if (!chunks.length) return;
     await sheets.saveSessionChunks(chunks);
@@ -284,7 +292,14 @@ async function startWhatsApp() {
     },
   });
 
-  sock.ev.on('creds.update', saveCreds);
+  let backupDebounceTimer = null;
+  sock.ev.on('creds.update', async () => {
+    await saveCreds();
+    // Debounce - creds.update can fire several times in a burst during
+    // pairing, we only want to push to the Sheet once things settle.
+    clearTimeout(backupDebounceTimer);
+    backupDebounceTimer = setTimeout(backupSessionToSheet, 4000);
+  });
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
