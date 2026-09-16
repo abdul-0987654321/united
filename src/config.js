@@ -27,6 +27,23 @@ const config = {
     name: process.env.BUSINESS_NAME || 'KSC Carpets',
     googleReviewLink: process.env.BUSINESS_GOOGLE_REVIEW_LINK || '',
     website: process.env.BUSINESS_WEBSITE || '',
+    // Pulled from ksc-carpets.com/services - keep this in sync if the
+    // client adds/removes a service on the website.
+    services: [
+      'Carpets - wool & synthetic, stair runners, bedrooms',
+      'LVT Flooring - luxury vinyl tile, wood & stone effects',
+      'Laminate - hard-wearing, easy to live with',
+      'Vinyl - sheet vinyl for kitchens & bathrooms',
+      'Astroturf - artificial grass, gardens & play areas',
+      'Commercial Flooring - offices, retail, hospitality contracts',
+      'Underlay & Accessories - grippers, thresholds, premium underlay',
+      'Floor Restoration - repairs and patching',
+      'Safety & Anti-Slip flooring - healthcare, education, care homes',
+    ],
+    serviceAreas: [
+      'Swansea', 'Bridgend', 'Carmarthen', 'Cardiff', 'Neath',
+      'Port Talbot', 'Llanelli', 'Pontypridd', 'Merthyr Tydfil',
+    ],
   },
 
   // Where the WhatsApp session (login) is stored. On Render, point this at
