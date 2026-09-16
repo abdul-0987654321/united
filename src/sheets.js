@@ -1,133 +1,207 @@
 'use strict';
 /**
- * sheets.js - background sync to the Google Sheet ONLY.
+ * store.js - KSC Carpets local-first data layer.
  *
- * This file is never awaited by the bot's reply path or the dashboard's
- * page loads - store.js is the source of truth for that (local JSON,
- * instant). This file just best-effort mirrors every write to the Sheet
- * in the background, with its own retry queue, so a slow or unreachable
- * Sheet never slows down or breaks the bot itself.
+ * Leads, messages, and settings live in local JSON files under DATA_DIR.
+ * All reads used by the bot and dashboard come from here - instant, no
+ * network dependency. The Google Sheet (via sheets.js) is a background
+ * mirror only: every write here also queues a best-effort sync to the
+ * Sheet, but a slow or unreachable Sheet NEVER blocks a WhatsApp reply
+ * or a dashboard page load.
  */
 
-const fetch = require('node-fetch');
-const https = require('https');
-const config = require('./config');
+const fs = require('fs');
+const path = require('path');
+const sheets = require('./sheets');
 
-const { webAppUrl, secret } = config.sheets;
+const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '..', 'data');
+fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// Some Windows setups have a broken/blackholed IPv6 route that Node tries
-// first and stalls on, even though the OS itself can reach the host fine
-// over IPv4. Force IPv4 so background sync attempts fail fast instead of
-// hanging.
-const ipv4Agent = new https.Agent({ family: 4 });
+const PATHS = {
+  leads: path.join(DATA_DIR, 'leads.json'),
+  messages: path.join(DATA_DIR, 'messages.json'),
+  settings: path.join(DATA_DIR, 'settings.json'),
+};
 
-const queue = [];
-let workerRunning = false;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-const state = { lastSyncAt: null, lastError: null, queued: 0 };
-
-async function callScript(action, payload = {}, timeoutMs = 10000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+function readJson(file, fallback) {
   try {
-    const res = await fetch(webAppUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret, action, payload }),
-      agent: ipv4Agent,
-      signal: controller.signal,
-    });
-    const json = await res.json();
-    if (!json.ok) throw new Error(json.error || `Sheet action "${action}" failed`);
-    return json.data;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function enqueue(action, payload) {
-  queue.push({ action, payload, attempt: 0 });
-  state.queued = queue.length;
-  void runWorker();
-}
-
-async function runWorker() {
-  if (workerRunning) return;
-  workerRunning = true;
-  try {
-    while (queue.length) {
-      const job = queue.shift();
-      state.queued = queue.length;
-      try {
-        await callScript(job.action, job.payload);
-        state.lastSyncAt = new Date().toISOString();
-        state.lastError = null;
-      } catch (err) {
-        job.attempt += 1;
-        state.lastError = `${job.action}: ${err.message}`;
-        if (job.attempt < 4) {
-          queue.push(job);
-          state.queued = queue.length;
-          await sleep(2000 * job.attempt * job.attempt); // ~2s, 8s, 18s
-        } else {
-          console.error(`[sheets] giving up on "${job.action}" after ${job.attempt} attempts: ${err.message}`);
-        }
-      }
-      await sleep(300); // be gentle on Apps Script's quota
-    }
-  } finally {
-    workerRunning = false;
-    state.queued = queue.length;
-  }
-}
-
-/* ---------------- Public sync calls - all fire-and-forget ---------------- */
-
-function syncLead(lead) {
-  enqueue('upsertLead', { phone: lead.phone, fields: lead });
-}
-
-function syncMessage(phone, entry) {
-  enqueue('logMessage', { phone, role: entry.role, text: entry.text });
-}
-
-function syncSettings(settings) {
-  enqueue('updateSettings', { fields: settings });
-}
-
-function getStatus() {
-  return { ...state };
-}
-
-/* ---------------- Session backup/restore - directly awaited, not queued ----------------
- * Restoring must finish before the bot starts, and backing up should be a
- * definite success/failure the caller can react to - so these bypass the
- * background queue and call the script directly. */
-
-async function saveSessionChunks(chunks) {
-  return callScript('saveSession', { chunks }, 40000);
-}
-
-async function loadSessionChunks() {
-  const data = await callScript('loadSession', {}, 40000);
-  return data?.chunks || [];
-}
-
-async function clearSessionRemote() {
-  try {
-    await callScript('clearSession', {}, 15000);
+    if (!fs.existsSync(file)) return fallback;
+    const raw = fs.readFileSync(file, 'utf8');
+    if (!raw.trim()) return fallback;
+    return JSON.parse(raw);
   } catch (err) {
-    console.error('Clearing remote session backup failed (non-fatal):', err.message);
+    console.error(`[store] could not read ${path.basename(file)}: ${err.message}`);
+    return fallback;
   }
+}
+
+function writeJson(file, data) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, file); // atomic-ish, avoids a half-written file on crash
+}
+
+/* ---------------- Settings ---------------- */
+
+const DEFAULT_SETTINGS = {
+  botEnabled: true,
+  followupEnabled: true,
+  followupMessage: "Hi {name}, just checking back about your free measure with KSC Carpets - would you like to go ahead? Reply STOP if you'd rather we didn't contact you again.",
+  followupDelayHours: 24,
+  followupMaxAttempts: 3,
+  reviewReminderEnabled: true,
+  reviewReminderDelayHours: 48,
+  reviewReminderMaxAttempts: 2,
+  reviewReminderMessage: "Hi {name}, just a quick reminder - we'd really appreciate a Google review when you get a moment: {reviewLink}",
+};
+
+let settingsCache = null;
+
+function getSettings() {
+  if (!settingsCache) settingsCache = { ...DEFAULT_SETTINGS, ...readJson(PATHS.settings, {}) };
+  return settingsCache;
+}
+
+function updateSettings(patch) {
+  settingsCache = { ...getSettings(), ...patch };
+  writeJson(PATHS.settings, settingsCache);
+  sheets.syncSettings(settingsCache); // fire-and-forget background mirror
+  return settingsCache;
+}
+
+/* ---------------- Leads ---------------- */
+
+let leadsCache = null;
+
+function loadLeads() {
+  if (!leadsCache) leadsCache = readJson(PATHS.leads, {}); // { [phone]: leadObject }
+  return leadsCache;
+}
+
+function saveLeads() {
+  writeJson(PATHS.leads, leadsCache);
+}
+
+function getLead(phone) {
+  return loadLeads()[phone] || null;
+}
+
+function upsertLead(phone, fields) {
+  const leads = loadLeads();
+  const existing = leads[phone] || {
+    phone,
+    name: '',
+    status: 'new',
+    carpetType: '',
+    room: '',
+    size: '',
+    colour: '',
+    budget: '',
+    preferredTime: '',
+    source: 'whatsapp',
+    createdAt: new Date().toISOString(),
+    lastContacted: '',
+    followupCount: 0,
+    reviewSent: false,
+    humanTakeover: false,
+  };
+  const updated = { ...existing, ...fields };
+  leads[phone] = updated;
+  saveLeads();
+  sheets.syncLead(updated); // fire-and-forget background mirror
+  return updated;
+}
+
+function getAllLeads() {
+  return Object.values(loadLeads()).sort(
+    (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+  );
+}
+
+function getLeadsNeedingFollowup() {
+  const { followupDelayHours, followupMaxAttempts } = getSettings();
+  const cutoffMs = followupDelayHours * 60 * 60 * 1000;
+  const now = Date.now();
+  return getAllLeads().filter((lead) => {
+    if (lead.status !== 'interested') return false;
+    if ((lead.followupCount || 0) >= followupMaxAttempts) return false;
+    const last = lead.lastContacted ? new Date(lead.lastContacted).getTime() : 0;
+    return now - last >= cutoffMs;
+  });
+}
+
+function getLeadsAwaitingReview() {
+  return getAllLeads().filter((lead) => lead.status === 'completed' && lead.reviewSent !== true);
+}
+
+/** Leads already asked for a review, but no reminder sent yet (or due for another one). */
+function getLeadsNeedingReviewReminder() {
+  const { reviewReminderDelayHours, reviewReminderMaxAttempts } = getSettings();
+  const cutoffMs = reviewReminderDelayHours * 60 * 60 * 1000;
+  const now = Date.now();
+  return getAllLeads().filter((lead) => {
+    if (!lead.reviewSent) return false;
+    if ((lead.reviewReminderCount || 0) >= reviewReminderMaxAttempts) return false;
+    const last = lead.reviewRequestedAt ? new Date(lead.reviewRequestedAt).getTime() : 0;
+    return now - last >= cutoffMs;
+  });
+}
+
+function setTakeover(phone, humanTakeover) {
+  return upsertLead(phone, { humanTakeover: Boolean(humanTakeover) });
+}
+
+/* ---------------- Messages (chat transcripts) ---------------- */
+
+let messagesCache = null;
+
+function loadMessages() {
+  if (!messagesCache) messagesCache = readJson(PATHS.messages, {}); // { [phone]: [{role,text,timestamp}] }
+  return messagesCache;
+}
+
+function saveMessages() {
+  writeJson(PATHS.messages, messagesCache);
+}
+
+function logMessage(phone, role, text) {
+  const messages = loadMessages();
+  if (!messages[phone]) messages[phone] = [];
+  const entry = { role, text, timestamp: new Date().toISOString() };
+  messages[phone].push(entry);
+  // Cap history per lead so the file doesn't grow unbounded on a long-running bot
+  if (messages[phone].length > 500) messages[phone] = messages[phone].slice(-500);
+  saveMessages();
+  sheets.syncMessage(phone, entry); // fire-and-forget background mirror
+  return entry;
+}
+
+function getMessages(phone) {
+  return loadMessages()[phone] || [];
+}
+
+/** Leads plus their last message - powers the dashboard chat list. */
+function getChats() {
+  const messages = loadMessages();
+  return getAllLeads().map((lead) => {
+    const thread = messages[lead.phone] || [];
+    const last = thread[thread.length - 1];
+    return { ...lead, lastMessage: last?.text || '', lastMessageAt: last?.timestamp || lead.lastContacted };
+  });
 }
 
 module.exports = {
-  syncLead,
-  syncMessage,
-  syncSettings,
-  getStatus,
-  saveSessionChunks,
-  loadSessionChunks,
-  clearSessionRemote,
+  DATA_DIR,
+  getSettings,
+  updateSettings,
+  getLead,
+  upsertLead,
+  getAllLeads,
+  getLeadsNeedingFollowup,
+  getLeadsAwaitingReview,
+  getLeadsNeedingReviewReminder,
+  setTakeover,
+  logMessage,
+  getMessages,
+  getChats,
 };
