@@ -105,7 +105,8 @@ function upsertLead(phone, fields) {
     followupCount: 0,
     reviewSent: false,
     humanTakeover: false,
-    adminNotified: false,
+    interestedNotified: false,
+    bookedNotified: false,
   };
   const updated = { ...existing, ...fields };
   leads[phone] = updated;
