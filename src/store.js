@@ -49,7 +49,6 @@ const DEFAULT_SETTINGS = {
   followupMessage: "Hi {name}, just checking back about your free measure with KSC Carpets - would you like to go ahead? Reply STOP if you'd rather we didn't contact you again.",
   followupDelayHours: 24,
   followupMaxAttempts: 3,
-  openDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], // which weekdays free measures can be booked on
   reviewReminderEnabled: true,
   reviewReminderDelayHours: 48,
   reviewReminderMaxAttempts: 2,
@@ -95,7 +94,10 @@ function upsertLead(phone, fields) {
     status: 'new',
     carpetType: '',
     room: '',
+    size: '',
+    colour: '',
     budget: '',
+    preferredTime: '',
     source: 'whatsapp',
     createdAt: new Date().toISOString(),
     lastContacted: '',
@@ -149,40 +151,6 @@ function setTakeover(phone, humanTakeover) {
   return upsertLead(phone, { humanTakeover: Boolean(humanTakeover) });
 }
 
-const WEEKDAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/**
- * Next available free-measure slots, skipping any already booked by another
- * lead. Looks ahead up to 21 days, only on the business's configured open
- * days, offering a Morning and Afternoon slot per open day, until it has
- * enough to show (or runs out of days to look at).
- */
-function getAvailableSlots(count = 6) {
-  const { openDays } = getSettings();
-  const takenSlots = new Set(
-    getAllLeads()
-      .filter((lead) => lead.bookingSlot)
-      .map((lead) => lead.bookingSlot)
-  );
-
-  const slots = [];
-  for (let daysAhead = 1; daysAhead <= 21 && slots.length < count; daysAhead++) {
-    const date = new Date();
-    date.setDate(date.getDate() + daysAhead);
-    const weekday = WEEKDAY_ABBR[date.getDay()];
-    if (!openDays.includes(weekday)) continue;
-
-    const label = `${weekday} ${date.getDate()} ${MONTH_ABBR[date.getMonth()]}`;
-    for (const part of ['Morning', 'Afternoon']) {
-      const slot = `${label} - ${part}`;
-      if (!takenSlots.has(slot)) slots.push(slot);
-      if (slots.length >= count) break;
-    }
-  }
-  return slots;
-}
-
 /* ---------------- Messages (chat transcripts) ---------------- */
 
 let messagesCache = null;
@@ -233,7 +201,6 @@ module.exports = {
   getLeadsAwaitingReview,
   getLeadsNeedingReviewReminder,
   setTakeover,
-  getAvailableSlots,
   logMessage,
   getMessages,
   getChats,
