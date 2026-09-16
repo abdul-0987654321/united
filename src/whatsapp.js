@@ -160,20 +160,59 @@ async function handleIncomingMessage(msg) {
   await sendBotReply(jid, ai);
   store.logMessage(phone, 'assistant', ai.reply);
 
-  store.upsertLead(phone, {
+  const carpetType = ai.carpetType || lead?.carpetType || '';
+  const room = ai.room || lead?.room || '';
+  const size = ai.size || lead?.size || '';
+  const colour = ai.colour || lead?.colour || '';
+  const budget = ai.budget || lead?.budget || '';
+  const preferredTime = ai.preferredTime || lead?.preferredTime || '';
+  const name = ai.name || lead?.name || pushName;
+  const status = statusFromIntent(ai.intent, lead?.status);
+
+  const updatedLead = store.upsertLead(phone, {
     jid, // remember the real address - may be @lid, not always @s.whatsapp.net
-    name: ai.name || lead?.name || pushName,
-    status: statusFromIntent(ai.intent, lead?.status),
-    carpetType: ai.carpetType || lead?.carpetType || '',
-    room: ai.room || lead?.room || '',
-    size: ai.size || lead?.size || '',
-    colour: ai.colour || lead?.colour || '',
-    budget: ai.budget || lead?.budget || '',
-    preferredTime: ai.preferredTime || lead?.preferredTime || '',
+    name,
+    status,
+    carpetType,
+    room,
+    size,
+    colour,
+    budget,
+    preferredTime,
     source: lead?.source || 'whatsapp',
     lastContacted: new Date().toISOString(),
     followupCount: 0, // they just replied, so the follow-up clock resets
   });
+
+  // Notify the admin once, the first time this enquiry has enough to act on.
+  const looksComplete = carpetType && room && (budget || preferredTime);
+  if (looksComplete && status !== 'not_interested' && !updatedLead.adminNotified) {
+    notifyAdmin(updatedLead);
+    store.upsertLead(phone, { adminNotified: true });
+  }
+}
+
+/** Pings the admin's own WhatsApp with a summary of a newly-qualified lead. */
+async function notifyAdmin(lead) {
+  try {
+    const settings = store.getSettings();
+    const adminNumber = (settings.adminNotificationNumber || '').replace(/\D/g, '');
+    if (!adminNumber || !sock) return;
+
+    const lines = [
+      `New enquiry - ${lead.name || 'Unknown name'} (${lead.phone})`,
+      lead.carpetType ? `Carpet: ${lead.carpetType}` : null,
+      lead.room ? `Room: ${lead.room}` : null,
+      lead.size ? `Size: ${lead.size}` : null,
+      lead.colour ? `Colour: ${lead.colour}` : null,
+      lead.budget ? `Budget: ${lead.budget}` : null,
+      lead.preferredTime ? `Preferred time: ${lead.preferredTime}` : null,
+    ].filter(Boolean);
+
+    await sock.sendMessage(`${adminNumber}@s.whatsapp.net`, { text: lines.join('\n') });
+  } catch (err) {
+    console.error('Admin notification failed (non-fatal):', err.message);
+  }
 }
 
 /**
