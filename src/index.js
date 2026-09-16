@@ -105,6 +105,11 @@ async function main() {
     res.json(store.upsertLead(req.params.phone, { status: req.body.status }));
   });
 
+  app.delete('/api/leads/:phone', requireDashboardAuth, (req, res) => {
+    store.deleteLead(req.params.phone);
+    res.json({ ok: true });
+  });
+
   app.get('/api/chats', requireDashboardAuth, (req, res) => {
     res.json(store.getChats());
   });
