@@ -53,6 +53,7 @@ const DEFAULT_SETTINGS = {
   reviewReminderDelayHours: 48,
   reviewReminderMaxAttempts: 2,
   reviewReminderMessage: "Hi {name}, just a quick reminder - we'd really appreciate a Google review when you get a moment: {reviewLink}",
+  adminNotificationNumber: '', // WhatsApp number to ping when a new lead completes their enquiry
 };
 
 let settingsCache = null;
@@ -104,6 +105,7 @@ function upsertLead(phone, fields) {
     followupCount: 0,
     reviewSent: false,
     humanTakeover: false,
+    adminNotified: false,
   };
   const updated = { ...existing, ...fields };
   leads[phone] = updated;
