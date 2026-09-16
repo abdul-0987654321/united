@@ -86,10 +86,12 @@ async function runReviewReminders() {
 function startFollowupScheduler() {
   // Every hour: check who needs a nudge, a review request, or a review reminder.
   // The delay/attempt limits themselves are enforced in the store queries.
-  cron.schedule('* * * * *', () => {
-    runFollowups();
-    runReviewRequests();
-    runReviewReminders();
+  // Each one is caught individually - an error in one must never crash the
+  // whole process (which would also kill the live WhatsApp connection).
+  cron.schedule('0 * * * *', () => {
+    runFollowups().catch((err) => console.error('runFollowups crashed:', err));
+    runReviewRequests().catch((err) => console.error('runReviewRequests crashed:', err));
+    runReviewReminders().catch((err) => console.error('runReviewReminders crashed:', err));
   });
   console.log('Follow-up scheduler started (hourly).');
 }
