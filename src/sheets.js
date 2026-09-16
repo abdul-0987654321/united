@@ -126,6 +126,23 @@ async function clearSessionRemote() {
   }
 }
 
+/* ---------------- Full restore from Sheet - used once at startup if local data is missing ----------------
+ * Same "directly awaited, not queued" reasoning as the session restore above:
+ * this needs a definite success/failure before the app decides whether it
+ * has data to serve. */
+
+async function loadAllLeadsFromSheet() {
+  return callScript('getAllLeads', {}, 30000);
+}
+
+async function loadAllMessagesFromSheet() {
+  return callScript('getAllMessages', {}, 30000);
+}
+
+async function loadSettingsFromSheet() {
+  return callScript('getSettings', {}, 20000);
+}
+
 module.exports = {
   syncLead,
   syncDeleteLead,
@@ -135,4 +152,7 @@ module.exports = {
   saveSessionChunks,
   loadSessionChunks,
   clearSessionRemote,
+  loadAllLeadsFromSheet,
+  loadAllMessagesFromSheet,
+  loadSettingsFromSheet,
 };
