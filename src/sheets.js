@@ -88,6 +88,10 @@ function syncLead(lead) {
   enqueue('upsertLead', { phone: lead.phone, fields: lead });
 }
 
+function syncDeleteLead(phone) {
+  enqueue('deleteLead', { phone });
+}
+
 function syncMessage(phone, entry) {
   enqueue('logMessage', { phone, role: entry.role, text: entry.text });
 }
@@ -124,6 +128,7 @@ async function clearSessionRemote() {
 
 module.exports = {
   syncLead,
+  syncDeleteLead,
   syncMessage,
   syncSettings,
   getStatus,
