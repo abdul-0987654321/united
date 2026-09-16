@@ -190,7 +190,7 @@ async function handleIncomingMessage(msg) {
   const budget = ai.budget || lead?.budget || '';
   const preferredTime = ai.preferredTime || lead?.preferredTime || '';
   const name = ai.name || lead?.name || pushName;
-  const hasRequiredInfo = Boolean(name && carpetType && room && (budget || preferredTime));
+  const hasRequiredInfo = Boolean(name && room && (budget || preferredTime));
   const status = computeStatus({ intent: ai.intent, currentStatus: lead?.status, hasRequiredInfo });
 
   const updatedLead = store.upsertLead(phone, {
@@ -208,14 +208,14 @@ async function handleIncomingMessage(msg) {
     followupCount: 0, // they just replied, so the follow-up clock resets
   });
 
-  // Notify the admin once, the first time this enquiry has enough to act on.
-  if (hasRequiredInfo && status !== 'not_interested' && !updatedLead.adminNotified) {
+  // Notify the admin once, the moment this lead is fully qualified ("booked").
+  if (status === 'booked' && !updatedLead.bookedNotified) {
     notifyAdmin(updatedLead);
-    store.upsertLead(phone, { adminNotified: true });
+    store.upsertLead(phone, { bookedNotified: true });
   }
 }
 
-/** Pings the admin's own WhatsApp with a summary of a newly-qualified lead. */
+/** Pings the admin's own WhatsApp with a summary of a booked lead. */
 async function notifyAdmin(lead) {
   try {
     const settings = store.getSettings();
@@ -223,13 +223,13 @@ async function notifyAdmin(lead) {
     if (!adminNumber || !sock) return;
 
     const lines = [
-      `New enquiry - ${lead.name || 'Unknown name'} (${lead.phone})`,
+      `Lead ready to book - ${lead.name || 'Unknown name'} (${lead.phone})`,
       lead.carpetType ? `Carpet: ${lead.carpetType}` : null,
       lead.room ? `Room: ${lead.room}` : null,
       lead.size ? `Size: ${lead.size}` : null,
       lead.colour ? `Colour: ${lead.colour}` : null,
       lead.budget ? `Budget: ${lead.budget}` : null,
-      lead.preferredTime ? `Preferred time: ${lead.preferredTime}` : null,
+      `Wants to meet: ${lead.preferredTime || 'no time given yet - ask them'}`,
     ].filter(Boolean);
 
     await sock.sendMessage(`${adminNumber}@s.whatsapp.net`, { text: lines.join('\n') });
