@@ -172,6 +172,7 @@
         <th>Preferred time</th>
         <th>Last contacted</th>
         <th>Change status</th>
+        <th></th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -252,6 +253,9 @@ function render() {
           <option value="not_interested" ${status === 'not_interested' ? 'selected' : ''}>Not interested</option>
         </select>
       </td>
+      <td>
+        <button class="save-btn danger" style="padding:5px 10px; font-size:12px;" data-phone="${escapeHtml(lead.phone)}">Delete</button>
+      </td>
     `;
     tr.querySelector('.status-select').addEventListener('change', async (e) => {
       await fetch('/api/leads/' + encodeURIComponent(lead.phone) + '/status', {
@@ -259,6 +263,11 @@ function render() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: e.target.value }),
       });
+      loadLeads();
+    });
+    tr.querySelector('button[data-phone]').addEventListener('click', async () => {
+      if (!confirm(`Delete ${lead.name || lead.phone}? This removes the lead and its whole chat history permanently.`)) return;
+      await fetch('/api/leads/' + encodeURIComponent(lead.phone), { method: 'DELETE' });
       loadLeads();
     });
     rows.appendChild(tr);
