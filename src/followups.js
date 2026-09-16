@@ -86,7 +86,7 @@ async function runReviewReminders() {
 function startFollowupScheduler() {
   // Every hour: check who needs a nudge, a review request, or a review reminder.
   // The delay/attempt limits themselves are enforced in the store queries.
-  cron.schedule('0 * * * *', () => {
+  cron.schedule('* * * * *', () => {
     runFollowups();
     runReviewRequests();
     runReviewReminders();
