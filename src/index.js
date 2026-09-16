@@ -44,6 +44,8 @@ function requireDashboardAuth(req, res, next) {
 async function main() {
   console.log(`Starting bot for ${config.business.name}...`);
 
+  await store.restoreFromSheetIfNeeded();
+
   await startWhatsApp();
   startFollowupScheduler();
 
