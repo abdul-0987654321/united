@@ -153,6 +153,19 @@ function setTakeover(phone, humanTakeover) {
   return upsertLead(phone, { humanTakeover: Boolean(humanTakeover) });
 }
 
+/** Permanently removes a lead and its full chat history, locally and from the Sheet backup. */
+function deleteLead(phone) {
+  const leads = loadLeads();
+  delete leads[phone];
+  saveLeads();
+
+  const messages = loadMessages();
+  delete messages[phone];
+  saveMessages();
+
+  sheets.syncDeleteLead(phone); // fire-and-forget background mirror
+}
+
 /* ---------------- Messages (chat transcripts) ---------------- */
 
 let messagesCache = null;
@@ -203,6 +216,7 @@ module.exports = {
   getLeadsAwaitingReview,
   getLeadsNeedingReviewReminder,
   setTakeover,
+  deleteLead,
   logMessage,
   getMessages,
   getChats,
