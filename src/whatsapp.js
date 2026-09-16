@@ -154,8 +154,7 @@ async function handleIncomingMessage(msg) {
 
   const history = pushHistory(phone, 'user', text);
 
-  const availableSlots = store.getAvailableSlots();
-  const ai = await getAIResponse(history, availableSlots);
+  const ai = await getAIResponse(history);
   pushHistory(phone, 'assistant', ai.reply);
 
   await sendBotReply(jid, ai);
@@ -164,11 +163,13 @@ async function handleIncomingMessage(msg) {
   store.upsertLead(phone, {
     jid, // remember the real address - may be @lid, not always @s.whatsapp.net
     name: ai.name || lead?.name || pushName,
-    status: ai.bookingSlot ? 'booked' : statusFromIntent(ai.intent, lead?.status),
+    status: statusFromIntent(ai.intent, lead?.status),
     carpetType: ai.carpetType || lead?.carpetType || '',
     room: ai.room || lead?.room || '',
+    size: ai.size || lead?.size || '',
+    colour: ai.colour || lead?.colour || '',
     budget: ai.budget || lead?.budget || '',
-    bookingSlot: ai.bookingSlot || lead?.bookingSlot || '',
+    preferredTime: ai.preferredTime || lead?.preferredTime || '',
     source: lead?.source || 'whatsapp',
     lastContacted: new Date().toISOString(),
     followupCount: 0, // they just replied, so the follow-up clock resets
