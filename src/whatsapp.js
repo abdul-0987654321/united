@@ -16,6 +16,7 @@ const config = require('./config');
 const sheets = require('./sheets');
 
 const logger = pino({ level: 'warn' });
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const SESSION_CHUNK_SIZE = 40000; // stay comfortably under a Sheet cell's ~50k char limit
 
 /** Bundles every file in the auth folder into one JSON string, split into chunks. */
@@ -178,10 +179,17 @@ async function handleIncomingMessage(msg) {
   const history = pushHistory(phone, 'user', text);
 
   const ai = await getAIResponse(history);
-  pushHistory(phone, 'assistant', ai.reply);
+  const replyText = buildReplyText(ai);
+  pushHistory(phone, 'assistant', replyText);
 
-  await sendBotReply(jid, ai);
-  store.logMessage(phone, 'assistant', ai.reply);
+  // Keep "typing..." showing and wait a natural 2-5s before sending - an
+  // instant, machine-speed reply is one of the clearest automation signals,
+  // so re-send the presence update right before the wait to keep it fresh.
+  await sock.sendPresenceUpdate('composing', jid).catch((err) => console.error('Presence update failed (non-fatal):', err));
+  await sleep(2000 + Math.floor(Math.random() * 3000));
+
+  await sock.sendMessage(jid, { text: replyText });
+  store.logMessage(phone, 'assistant', replyText);
 
   const carpetType = ai.carpetType || lead?.carpetType || '';
   const room = ai.room || lead?.room || '';
@@ -239,43 +247,16 @@ async function notifyAdmin(lead) {
 }
 
 /**
- * Sends the AI's reply as tappable buttons (2-3 options) or a list (4-10 options)
- * when options are given, otherwise plain text. Falls back to plain text if the
- * interactive message fails to send - WhatsApp's rendering of buttons/lists on
- * non-Business numbers is not fully guaranteed, so this must never block the reply.
+ * Turns any AI-suggested options into a plain numbered list appended to the
+ * reply, instead of native buttons/lists. Native interactive messages are
+ * one of the clearest signals WhatsApp uses to flag unofficial automation -
+ * plain numbered text ("1. Yes  2. No") gets the same job done far more safely.
  */
-async function sendBotReply(jid, ai) {
+function buildReplyText(ai) {
   const options = (ai.options || []).filter(Boolean).slice(0, 10);
-
-  try {
-    if (options.length >= 4) {
-      await sock.sendMessage(jid, {
-        text: ai.reply,
-        footer: 'KSC Carpets',
-        buttonText: 'Choose an option',
-        sections: [{
-          title: 'Options',
-          rows: options.map((opt, i) => ({ title: opt, rowId: `opt_${i}` })),
-        }],
-      });
-    } else if (options.length >= 2) {
-      await sock.sendMessage(jid, {
-        text: ai.reply,
-        footer: 'KSC Carpets',
-        buttons: options.map((opt, i) => ({
-          buttonId: `opt_${i}`,
-          buttonText: { displayText: opt },
-          type: 1,
-        })),
-        headerType: 1,
-      });
-    } else {
-      await sock.sendMessage(jid, { text: ai.reply });
-    }
-  } catch (err) {
-    console.error('Interactive message failed, sending plain text instead:', err);
-    await sock.sendMessage(jid, { text: ai.reply });
-  }
+  if (!options.length) return ai.reply;
+  const numbered = options.map((opt, i) => `${i + 1}. ${opt}`).join('\n');
+  return `${ai.reply}\n\n${numbered}`;
 }
 
 async function startWhatsApp() {
