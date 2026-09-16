@@ -6,6 +6,16 @@ const { startWhatsApp, getConnectionStatus, getLatestQr, resetConnection, sendMa
 const { startFollowupScheduler, runFollowups, runReviewRequests, runReviewReminders } = require('./followups');
 const store = require('./store');
 
+// A single unhandled error anywhere in the app must never be allowed to
+// silently kill the whole process - that would also drop the live WhatsApp
+// connection and force a full reconnect/re-pair for no good reason.
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled promise rejection (process kept alive):', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception (process kept alive):', err);
+});
+
 const COOKIE_NAME = 'ksc_auth';
 // Derived from the password itself - no separate session store needed, and
 // changing DASHBOARD_PASSWORD automatically invalidates any old cookie.
