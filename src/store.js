@@ -205,8 +205,64 @@ function getChats() {
   });
 }
 
+/* ---------------- Restore from Sheet on startup ----------------
+ * Render's free-tier disk is wiped on every redeploy/restart, same as
+ * AUTH_DIR would be without a persistent disk. If the local leads file is
+ * empty (fresh disk), pull everything back from the Google Sheet backup
+ * before the bot/dashboard start serving - mirrors the WhatsApp session
+ * restore pattern in whatsapp.js. Non-fatal if it fails: the app just
+ * starts empty and rebuilds locally, same as before this existed.
+ */
+async function restoreFromSheetIfNeeded() {
+  const hasLocalLeads = Object.keys(readJson(PATHS.leads, {})).length > 0;
+  if (hasLocalLeads) return { restored: false, reason: 'local data already present' };
+
+  console.log('[store] No local leads found - attempting to restore from Google Sheet backup...');
+  try {
+    const [sheetLeads, sheetMessages, sheetSettings] = await Promise.all([
+      sheets.loadAllLeadsFromSheet(),
+      sheets.loadAllMessagesFromSheet(),
+      sheets.loadSettingsFromSheet(),
+    ]);
+
+    if (Array.isArray(sheetLeads) && sheetLeads.length) {
+      leadsCache = {};
+      for (const lead of sheetLeads) {
+        if (!lead || !lead.phone) continue;
+        leadsCache[String(lead.phone)] = lead;
+      }
+      saveLeads();
+      console.log(`[store] Restored ${sheetLeads.length} lead(s) from Sheet.`);
+    }
+
+    if (Array.isArray(sheetMessages) && sheetMessages.length) {
+      messagesCache = {};
+      for (const msg of sheetMessages) {
+        if (!msg || !msg.phone) continue;
+        const phone = String(msg.phone);
+        if (!messagesCache[phone]) messagesCache[phone] = [];
+        messagesCache[phone].push({ role: msg.role, text: msg.text, timestamp: msg.timestamp });
+      }
+      saveMessages();
+      console.log(`[store] Restored messages for ${Object.keys(messagesCache).length} lead(s) from Sheet.`);
+    }
+
+    if (sheetSettings && typeof sheetSettings === 'object') {
+      settingsCache = { ...DEFAULT_SETTINGS, ...sheetSettings };
+      writeJson(PATHS.settings, settingsCache);
+      console.log('[store] Restored settings from Sheet.');
+    }
+
+    return { restored: true };
+  } catch (err) {
+    console.error('[store] Restore from Sheet failed - starting empty, non-fatal:', err.message);
+    return { restored: false, error: err.message };
+  }
+}
+
 module.exports = {
   DATA_DIR,
+  restoreFromSheetIfNeeded,
   getSettings,
   updateSettings,
   getLead,
