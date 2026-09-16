@@ -45,9 +45,6 @@
   .save-btn.danger { background: #a5342f; }
   .save-btn:disabled { opacity: 0.5; cursor: default; }
   .saved-note { font-size: 12px; color: #2e9e4c; }
-  .day-picker { display: flex; gap: 6px; }
-  .day-chip { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fafafa; color: #888; user-select: none; }
-  .day-chip.active { background: #222; color: #fff; border-color: #222; }
   .qr-box { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 4px; }
   .qr-box p { font-size: 12px; color: #666; margin: 0; }
   .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
@@ -107,24 +104,6 @@
   </div>
 
   <div class="panel">
-    <p class="panel-title">Business hours</p>
-    <div class="panel-row">
-      <div>
-        <span class="field-label">Days free measures can be booked on</span>
-        <div class="day-picker" id="dayPicker">
-          <span class="day-chip" data-day="Mon">Mon</span>
-          <span class="day-chip" data-day="Tue">Tue</span>
-          <span class="day-chip" data-day="Wed">Wed</span>
-          <span class="day-chip" data-day="Thu">Thu</span>
-          <span class="day-chip" data-day="Fri">Fri</span>
-          <span class="day-chip" data-day="Sat">Sat</span>
-          <span class="day-chip" data-day="Sun">Sun</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="panel">
     <p class="panel-title">Follow-up settings</p>
     <div class="panel-row" style="display:block">
       <span class="field-label">Follow-up message (use {name} for the customer's name)</span>
@@ -177,7 +156,10 @@
         <th>Status</th>
         <th>Carpet</th>
         <th>Room</th>
+        <th>Size</th>
+        <th>Colour</th>
         <th>Budget</th>
+        <th>Preferred time</th>
         <th>Last contacted</th>
         <th>Change status</th>
       </tr>
@@ -246,7 +228,10 @@ function render() {
       <td><span class="badge ${status}">${status.replace('_',' ')}</span></td>
       <td>${escapeHtml(lead.carpetType || '-')}</td>
       <td>${escapeHtml(lead.room || '-')}</td>
+      <td>${escapeHtml(lead.size || '-')}</td>
+      <td>${escapeHtml(lead.colour || '-')}</td>
       <td>${escapeHtml(lead.budget || '-')}</td>
+      <td>${escapeHtml(lead.preferredTime || '-')}</td>
       <td>${lastContacted}</td>
       <td>
         <select data-phone="${escapeHtml(lead.phone)}" class="status-select">
@@ -323,22 +308,6 @@ document.getElementById('relinkBtn').addEventListener('click', async (e) => {
 });
 
 let currentSettings = {};
-let selectedDays = [];
-
-function renderDayPicker() {
-  document.querySelectorAll('.day-chip').forEach((chip) => {
-    chip.classList.toggle('active', selectedDays.includes(chip.dataset.day));
-  });
-}
-
-document.getElementById('dayPicker').addEventListener('click', (e) => {
-  const chip = e.target.closest('.day-chip');
-  if (!chip) return;
-  const day = chip.dataset.day;
-  selectedDays = selectedDays.includes(day) ? selectedDays.filter(d => d !== day) : [...selectedDays, day];
-  renderDayPicker();
-  // Not saved yet - takes effect when "Save settings" is clicked, same as everything else here.
-});
 
 async function loadSettings() {
   const res = await fetch('/api/settings');
@@ -349,8 +318,6 @@ async function loadSettings() {
   document.getElementById('followupMessage').value = currentSettings.followupMessage || '';
   document.getElementById('reviewReminderToggle').checked = currentSettings.reviewReminderEnabled !== false;
   document.getElementById('reviewReminderMessage').value = currentSettings.reviewReminderMessage || '';
-  selectedDays = currentSettings.openDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  renderDayPicker();
 }
 
 async function saveSettings(partial) {
@@ -367,8 +334,8 @@ async function saveSettings(partial) {
   }
 }
 
-// One button saves everything on this page - toggles and the day picker no
-// longer save the instant you touch them, so nothing goes live half-edited.
+// One button saves everything on this page - toggles no longer save the
+// instant you touch them, so nothing goes live half-edited.
 document.getElementById('saveSettingsBtn').addEventListener('click', () => {
   saveSettings({
     botEnabled: document.getElementById('botEnabledToggle').checked,
@@ -376,7 +343,6 @@ document.getElementById('saveSettingsBtn').addEventListener('click', () => {
     followupMessage: document.getElementById('followupMessage').value,
     reviewReminderEnabled: document.getElementById('reviewReminderToggle').checked,
     reviewReminderMessage: document.getElementById('reviewReminderMessage').value,
-    openDays: selectedDays,
   });
 });
 
