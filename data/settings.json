@@ -2,7 +2,7 @@
   "botEnabled": true,
   "followupEnabled": true,
   "followupMessage": "Hi {name}, just checking back about your free measure with KSC Carpets - would you like to go ahead? Reply STOP if you'd rather we didn't contact you again.",
-  "followupDelayHours": 0.017,
+  "followupDelayHours": 24,
   "followupMaxAttempts": 3,
   "openDays": [
     "Mon",
@@ -12,7 +12,7 @@
     "Fri"
   ],
   "reviewReminderEnabled": true,
-  "reviewReminderDelayHours": 0.017,
+  "reviewReminderDelayHours": 48,
   "reviewReminderMaxAttempts": 2,
   "reviewReminderMessage": "Hi {name}, just a quick reminder - we'd really appreciate a Google review when you get a moment: {reviewLink}"
 }
