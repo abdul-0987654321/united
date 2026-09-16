@@ -40,8 +40,12 @@ async function backupSessionToSheet() {
     const credsPath = path.join(config.authDir, 'creds.json');
     if (!fs.existsSync(credsPath)) return;
     const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-    if (creds.registered !== true) {
-      console.log('Session not fully registered yet - skipping backup for now.');
+    // The "registered" flag doesn't reliably flip true on this fork even for
+    // a fully working session - check for actual pairing data instead (a
+    // real WhatsApp identity + signed account), which is what a genuinely
+    // usable session actually needs.
+    if (!creds.me?.id || !creds.account?.accountSignatureKey) {
+      console.log('Session not paired yet - skipping backup for now.');
       return;
     }
 
