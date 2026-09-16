@@ -3,73 +3,93 @@
 <head>
 <meta charset="UTF-8">
 <title>KSC Carpets - Leads Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body { font-family: -apple-system, Arial, sans-serif; background: #f5f4f0; margin: 0; padding: 24px; color: #222; }
-  h1 { font-size: 20px; margin-bottom: 4px; }
-  .sub { color: #666; font-size: 13px; margin-bottom: 20px; }
-  .filters { margin-bottom: 12px; display: flex; gap: 8px; }
-  .filters button { padding: 6px 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
-  .filters button.active { background: #222; color: #fff; border-color: #222; }
-  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-  th, td { text-align: left; padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #eee; }
-  th { background: #fafafa; font-weight: 600; color: #555; }
+  :root {
+    --accent: #1f7a5c;
+    --accent-dark: #16593f;
+    --ink: #1c2321;
+    --muted: #6b7570;
+    --line: #e7e5e0;
+    --surface: #ffffff;
+    --bg: #f6f5f1;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, Arial, sans-serif; background: var(--bg); margin: 0; padding: 28px; color: var(--ink); }
+  h1 { font-size: 21px; margin: 0 0 2px; font-weight: 700; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+  .filters { margin-bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .filters button { padding: 7px 14px; border: 1px solid var(--line); background: var(--surface); border-radius: 20px; cursor: pointer; font-size: 12.5px; font-weight: 500; color: var(--muted); transition: .15s; }
+  .filters button:hover { border-color: var(--accent); color: var(--accent); }
+  .filters button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 8px rgba(0,0,0,0.04); }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13px; border-bottom: 1px solid var(--line); }
+  th { background: #fafaf8; font-weight: 600; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
   tr:last-child td { border-bottom: none; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  tbody tr:hover td { background: #fafaf8; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 600; }
   .badge.new { background: #e6f0ff; color: #1a56b0; }
-  .badge.interested { background: #e6f7ec; color: #1a7a3d; }
+  .badge.interested { background: #e3f4ec; color: var(--accent-dark); }
   .badge.not_interested { background: #fdeaea; color: #a5342f; }
   .badge.booked { background: #fff4e0; color: #a56b0c; }
-  .badge.completed { background: #eee; color: #555; }
-  .empty { padding: 40px; text-align: center; color: #888; }
-  .refresh { font-size: 12px; color: #888; margin-left: auto; }
-  .panel { background: #fff; border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
-  .panel-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #888; margin: 0 0 12px; }
+  .badge.completed { background: #ececea; color: #555; }
+  .empty { padding: 48px; text-align: center; color: var(--muted); font-size: 13px; }
+  .refresh { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .panel { background: var(--surface); border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 8px rgba(0,0,0,0.04); }
+  .panel-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent-dark); margin: 0 0 14px; display: flex; align-items: center; gap: 6px; }
   .panel-row { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; flex-wrap: wrap; }
   .panel-row:last-child { margin-bottom: 0; }
   .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-  .status-dot.connected { background: #2e9e4c; }
+  .status-dot.connected { background: var(--accent); }
   .status-dot.disconnected { background: #c94b3f; }
   .status-dot.connecting { background: #c9963f; }
   .status-text { font-size: 13px; font-weight: 600; }
   .switch { position: relative; width: 38px; height: 21px; display: inline-block; flex-shrink: 0; }
   .switch input { opacity: 0; width: 0; height: 0; }
-  .slider { position: absolute; inset: 0; background: #ccc; border-radius: 22px; cursor: pointer; transition: .2s; }
+  .slider { position: absolute; inset: 0; background: #d8d6d0; border-radius: 22px; cursor: pointer; transition: .2s; }
   .slider:before { content: ""; position: absolute; height: 15px; width: 15px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
-  .switch input:checked + .slider { background: #2e9e4c; }
+  .switch input:checked + .slider { background: var(--accent); }
   .switch input:checked + .slider:before { transform: translateX(17px); }
-  .toggle-label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-  textarea { width: 100%; box-sizing: border-box; font-family: inherit; font-size: 13px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; min-height: 56px; }
-  .field-label { font-size: 12px; font-weight: 600; color: #555; display: block; margin-bottom: 5px; }
-  input[type="number"] { width: 64px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
-  .save-btn { padding: 7px 14px; border: none; background: #222; color: #fff; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .toggle-label { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 500; }
+  textarea, input[type="text"] { width: 100%; box-sizing: border-box; font-family: inherit; font-size: 13px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; resize: vertical; min-height: 56px; background: #fdfdfc; }
+  input[type="text"] { min-height: unset; }
+  input[type="text"]:focus, textarea:focus { outline: none; border-color: var(--accent); background: #fff; }
+  .field-label { font-size: 12px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 6px; }
+  input[type="number"] { width: 64px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+  .save-btn { padding: 8px 16px; border: none; background: var(--accent); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: .15s; }
+  .save-btn:hover { background: var(--accent-dark); }
   .save-btn.danger { background: #a5342f; }
+  .save-btn.danger:hover { background: #7e2721; }
+  .save-btn.secondary { background: #edece8; color: var(--ink); }
+  .save-btn.secondary:hover { background: #e2e0da; }
   .save-btn:disabled { opacity: 0.5; cursor: default; }
-  .saved-note { font-size: 12px; color: #2e9e4c; }
+  .saved-note { font-size: 12px; color: var(--accent-dark); font-weight: 600; }
   .qr-box { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 4px; }
-  .qr-box p { font-size: 12px; color: #666; margin: 0; }
-  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
-  .tabs button { padding: 8px 16px; border: none; background: transparent; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; color: #666; }
-  .tabs button.active { border-bottom-color: #222; color: #222; font-weight: 600; }
-  .chat-layout { display: flex; gap: 16px; height: 560px; }
-  .chat-list { width: 280px; background: #fff; border-radius: 8px; overflow-y: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-  .chat-list-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
-  .chat-list-item:hover { background: #fafafa; }
-  .chat-list-item.active { background: #eef4ff; }
+  .qr-box p { font-size: 12px; color: var(--muted); margin: 0; }
+  .tabs { display: inline-flex; gap: 2px; margin-bottom: 16px; background: #ece9e3; padding: 4px; border-radius: 10px; }
+  .tabs button { padding: 7px 18px; border: none; background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 7px; color: var(--muted); transition: .15s; }
+  .tabs button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .chat-layout { display: flex; gap: 14px; height: 560px; }
+  .chat-list { width: 280px; background: var(--surface); border-radius: 12px; overflow-y: auto; box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 8px rgba(0,0,0,0.04); }
+  .chat-list-item { padding: 12px 14px; border-bottom: 1px solid var(--line); cursor: pointer; transition: .1s; }
+  .chat-list-item:hover { background: #fafaf8; }
+  .chat-list-item.active { background: #e3f4ec; }
   .chat-list-item .name { font-size: 13px; font-weight: 600; }
-  .chat-list-item .preview { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .chat-panel { flex: 1; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; flex-direction: column; }
-  .chat-header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 12px; }
-  .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
-  .msg { max-width: 70%; padding: 8px 12px; border-radius: 10px; font-size: 13px; }
-  .msg.user { align-self: flex-start; background: #f0f0f0; }
-  .msg.assistant { align-self: flex-end; background: #e6f7ec; }
-  .msg.human { align-self: flex-end; background: #fff4e0; }
-  .msg .role-label { font-size: 10px; color: #999; margin-bottom: 2px; }
-  .chat-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #eee; }
-  .chat-input input { flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
-  .chat-input button { padding: 8px 16px; border: none; background: #222; color: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .chat-list-item .preview { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .chat-panel { flex: 1; background: var(--surface); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 8px rgba(0,0,0,0.04); display: flex; flex-direction: column; }
+  .chat-header { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 9px; }
+  .msg { max-width: 70%; padding: 9px 13px; border-radius: 12px; font-size: 13px; line-height: 1.4; }
+  .msg.user { align-self: flex-start; background: #f1f0ec; }
+  .msg.assistant { align-self: flex-end; background: #e3f4ec; }
+  .msg.human { align-self: flex-end; background: #fff2df; }
+  .msg .role-label { font-size: 10px; color: var(--muted); margin-bottom: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+  .chat-input { display: flex; gap: 8px; padding: 14px; border-top: 1px solid var(--line); }
+  .chat-input input { flex: 1; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+  .chat-input button { padding: 9px 18px; border: none; background: var(--accent); color: #fff; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
   .chat-input:disabled, .chat-input.disabled input, .chat-input.disabled button { opacity: 0.5; }
-  .takeover-note { font-size: 11px; color: #888; padding: 0 12px 10px; }
+  .takeover-note { font-size: 11.5px; color: var(--muted); padding: 0 14px 12px; }
 </style>
 </head>
 <body>
@@ -84,7 +104,7 @@
     </div>
     <div class="qr-box" id="qrRow" style="display:none">
       <p>Scan with WhatsApp on the KSC Carpets phone: Settings &gt; Linked Devices &gt; Link a Device</p>
-      <img id="qrImage" style="width:200px; height:200px; border:1px solid #ddd; border-radius:8px;">
+      <img id="qrImage" style="width:200px; height:200px; border:1px solid var(--line); border-radius:8px;">
     </div>
   </div>
 
@@ -99,29 +119,19 @@
         <span class="switch"><input type="checkbox" id="followupEnabledToggle"><span class="slider"></span></span>
         Follow-ups
       </label>
-      <button class="save-btn" id="runNowBtn" style="margin-left:auto;">Send follow-ups / reviews now</button>
-    </div>
-  </div>
-
-  <div class="panel">
-    <p class="panel-title">Follow-up settings</p>
-    <div class="panel-row" style="display:block">
-      <span class="field-label">Follow-up message (use {name} for the customer's name)</span>
-      <textarea id="followupMessage"></textarea>
-    </div>
-  </div>
-
-  <div class="panel">
-    <p class="panel-title">Review reminder</p>
-    <div class="panel-row">
       <label class="toggle-label">
         <span class="switch"><input type="checkbox" id="reviewReminderToggle"><span class="slider"></span></span>
-        Send a reminder if no reply to the review request
+        Review reminders
       </label>
+      <button class="save-btn secondary" id="runNowBtn" style="margin-left:auto;">Send follow-ups / reviews now</button>
     </div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Notify me about new enquiries</p>
     <div class="panel-row" style="display:block">
-      <span class="field-label">Reminder message (use {name} and {reviewLink})</span>
-      <textarea id="reviewReminderMessage"></textarea>
+      <span class="field-label">Your WhatsApp number (gets a message the moment a lead completes an enquiry)</span>
+      <input type="text" id="adminNotificationNumber" placeholder="e.g. 447xxxxxxxxx">
     </div>
   </div>
 
@@ -315,9 +325,8 @@ async function loadSettings() {
   currentSettings = await res.json();
   document.getElementById('botEnabledToggle').checked = currentSettings.botEnabled !== false;
   document.getElementById('followupEnabledToggle').checked = currentSettings.followupEnabled !== false;
-  document.getElementById('followupMessage').value = currentSettings.followupMessage || '';
   document.getElementById('reviewReminderToggle').checked = currentSettings.reviewReminderEnabled !== false;
-  document.getElementById('reviewReminderMessage').value = currentSettings.reviewReminderMessage || '';
+  document.getElementById('adminNotificationNumber').value = currentSettings.adminNotificationNumber || '';
 }
 
 async function saveSettings(partial) {
@@ -340,9 +349,8 @@ document.getElementById('saveSettingsBtn').addEventListener('click', () => {
   saveSettings({
     botEnabled: document.getElementById('botEnabledToggle').checked,
     followupEnabled: document.getElementById('followupEnabledToggle').checked,
-    followupMessage: document.getElementById('followupMessage').value,
     reviewReminderEnabled: document.getElementById('reviewReminderToggle').checked,
-    reviewReminderMessage: document.getElementById('reviewReminderMessage').value,
+    adminNotificationNumber: document.getElementById('adminNotificationNumber').value.trim(),
   });
 });
 
