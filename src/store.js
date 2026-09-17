@@ -70,6 +70,22 @@ function updateSettings(patch) {
   return settingsCache;
 }
 
+/**
+ * Same as updateSettings, but waits for the Sheet mirror to actually
+ * complete before returning. Settings changes are rare (dashboard/admin
+ * action, not a hot chat-reply path) so a couple of seconds' wait here is
+ * fine - and it means a redeploy right after saving won't restore a stale
+ * value from the Sheet on the next restart. Use this from the dashboard's
+ * "save settings" route; use plain updateSettings anywhere on a path that
+ * must stay instant.
+ */
+async function updateSettingsAwaitSync(patch) {
+  settingsCache = { ...getSettings(), ...patch };
+  writeJson(PATHS.settings, settingsCache);
+  await sheets.syncSettingsAwait(settingsCache);
+  return settingsCache;
+}
+
 /* ---------------- Leads ---------------- */
 
 let leadsCache = null;
@@ -116,6 +132,47 @@ function upsertLead(phone, fields) {
   leads[phone] = updated;
   saveLeads();
   sheets.syncLead(updated); // fire-and-forget background mirror
+  return updated;
+}
+
+/**
+ * Same as upsertLead, but waits for the Sheet mirror to complete before
+ * returning. Use this ONLY for the anti-spam gate flags (reviewSent,
+ * priceCallbackNotified, followupCount, reviewReminderCount, etc.) - if a
+ * restart's Sheet-restore rolled one of these back to a stale value, the
+ * customer would get a duplicate message. Not for routine chat-field
+ * updates (name, carpetType, etc.) - those stay on the fast fire-and-forget
+ * path so a WhatsApp reply is never delayed by the Sheet.
+ */
+async function upsertLeadAwaitSync(phone, fields) {
+  const leads = loadLeads();
+  const existing = leads[phone] || {
+    phone,
+    name: '',
+    status: 'new',
+    carpetType: '',
+    room: '',
+    size: '',
+    colour: '',
+    budget: '',
+    preferredTime: '',
+    customerAddress: '',
+    postcode: '',
+    contactNumber: '',
+    source: 'whatsapp',
+    createdAt: new Date().toISOString(),
+    lastContacted: '',
+    followupCount: 0,
+    reviewSent: false,
+    humanTakeover: false,
+    interestedNotified: false,
+    bookedNotified: false,
+    priceCallbackNotified: false,
+  };
+  const updated = { ...existing, ...fields };
+  leads[phone] = updated;
+  saveLeads();
+  await sheets.syncLeadAwait(updated);
   return updated;
 }
 
@@ -270,8 +327,10 @@ module.exports = {
   restoreFromSheetIfNeeded,
   getSettings,
   updateSettings,
+  updateSettingsAwaitSync,
   getLead,
   upsertLead,
+  upsertLeadAwaitSync,
   getAllLeads,
   getLeadsNeedingFollowup,
   getLeadsAwaitingReview,
