@@ -239,9 +239,13 @@ async function handleIncomingMessage(msg) {
   });
 
   // Notify the admin once, the moment this lead is fully qualified ("booked").
+  // Awaited sync (the customer's reply has already been sent above, so this
+  // doesn't delay them at all): bookedNotified/priceCallbackNotified are
+  // anti-spam gates - if a restart's Sheet-restore rolled one back to a
+  // stale value, the admin would get a duplicate alert.
   if (status === 'booked' && !updatedLead.bookedNotified) {
     notifyAdmin(updatedLead, 'booked');
-    store.upsertLead(phone, { bookedNotified: true });
+    await store.upsertLeadAwaitSync(phone, { bookedNotified: true });
   }
 
   // Also notify the admin the moment a customer declines the visit but still
@@ -249,7 +253,7 @@ async function handleIncomingMessage(msg) {
   // promise, since nothing else in the app would ever alert a human to it.
   if (ai.wantsPriceCallback && !updatedLead.priceCallbackNotified) {
     notifyAdmin(updatedLead, 'price_callback');
-    store.upsertLead(phone, { priceCallbackNotified: true });
+    await store.upsertLeadAwaitSync(phone, { priceCallbackNotified: true });
   }
 }
 
