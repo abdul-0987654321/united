@@ -99,6 +99,9 @@ function upsertLead(phone, fields) {
     colour: '',
     budget: '',
     preferredTime: '',
+    customerAddress: '',
+    postcode: '',
+    contactNumber: '',
     source: 'whatsapp',
     createdAt: new Date().toISOString(),
     lastContacted: '',
@@ -107,6 +110,7 @@ function upsertLead(phone, fields) {
     humanTakeover: false,
     interestedNotified: false,
     bookedNotified: false,
+    priceCallbackNotified: false,
   };
   const updated = { ...existing, ...fields };
   leads[phone] = updated;
