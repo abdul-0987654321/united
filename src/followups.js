@@ -63,6 +63,16 @@ async function runFollowups() {
 }
 
 async function runReviewRequests() {
+  // TEMPORARY DEBUG LOGGING - same idea as runFollowups() above: show exactly
+  // which "completed" leads exist and why each is/isn't getting a review request.
+  const debugCompleted = store.getAllLeads().filter((l) => l.status === 'completed');
+  if (debugCompleted.length === 0) {
+    console.log('[reviews-debug] no leads with status "completed" found at all.');
+  }
+  for (const l of debugCompleted) {
+    console.log(`[reviews-debug] lead ${l.phone}: status=${l.status} reviewSent=${l.reviewSent} (awaiting review = ${l.reviewSent !== true})`);
+  }
+
   const leads = store.getLeadsAwaitingReview();
 
   for (const lead of leads) {
