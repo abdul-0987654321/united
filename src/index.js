@@ -109,8 +109,14 @@ async function main() {
     res.json(store.getSettings());
   });
 
-  app.post('/api/settings', requireDashboardAuth, (req, res) => {
-    res.json(store.updateSettings(req.body));
+  app.post('/api/settings', requireDashboardAuth, async (req, res) => {
+    // Awaited so the Sheet mirror is actually done before this responds -
+    // if a redeploy happens moments after saving, the next restart's
+    // Sheet-restore won't roll the setting back to a stale value. A
+    // dashboard save is an infrequent admin action, so the extra second or
+    // two is fine here (unlike the hot WhatsApp chat-reply path).
+    const updated = await store.updateSettingsAwaitSync(req.body);
+    res.json(updated);
   });
 
   app.post('/api/leads/:phone/status', requireDashboardAuth, (req, res) => {
