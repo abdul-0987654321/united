@@ -27,6 +27,9 @@ const config = {
     name: process.env.BUSINESS_NAME || 'KSC Carpets',
     googleReviewLink: process.env.BUSINESS_GOOGLE_REVIEW_LINK || '',
     website: process.env.BUSINESS_WEBSITE || '',
+    // Shown to a customer only when both are set - never invented if empty.
+    address: process.env.BUSINESS_ADDRESS || '',
+    phone: process.env.BUSINESS_PHONE || '',
     // Pulled from ksc-carpets.com/services - keep this in sync if the
     // client adds/removes a service on the website.
     services: [
@@ -37,7 +40,7 @@ const config = {
       'Astroturf - artificial grass, gardens & play areas',
       'Commercial Flooring - offices, retail, hospitality contracts',
       'Underlay & Accessories - grippers, thresholds, premium underlay',
-      'Floor Restoration - repairs and patching',
+      'Screeding & Sub-floor Preparation - screed floors and all sub-prep work',
       'Safety & Anti-Slip flooring - healthcare, education, care homes',
     ],
     serviceAreas: [
