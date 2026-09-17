@@ -178,7 +178,23 @@ async function handleIncomingMessage(msg) {
 
   const history = pushHistory(phone, 'user', text);
 
-  const ai = await getAIResponse(history);
+  // Tell the model exactly what's already confirmed on this lead, so it
+  // never has to re-derive it from raw chat text alone (and never re-asks
+  // for details - like name/address/postcode/contact number - it already has).
+  const known = {
+    name: lead?.name || '',
+    carpetType: lead?.carpetType || '',
+    room: lead?.room || '',
+    size: lead?.size || '',
+    colour: lead?.colour || '',
+    budget: lead?.budget || '',
+    preferredTime: lead?.preferredTime || '',
+    customerAddress: lead?.customerAddress || '',
+    postcode: lead?.postcode || '',
+    contactNumber: lead?.contactNumber || '',
+  };
+
+  const ai = await getAIResponse(history, known);
   const replyText = buildReplyText(ai);
   pushHistory(phone, 'assistant', replyText);
 
