@@ -261,7 +261,11 @@ async function handleIncomingMessage(msg) {
 async function notifyAdmin(lead, reason = 'booked') {
   try {
     const settings = store.getSettings();
-    const adminNumber = (settings.adminNotificationNumber || '').replace(/\D/g, '');
+    // String(...) first, because adminNotificationNumber can come back as a
+    // number (or other non-string value) if settings.json was hand-edited
+    // without quotes around it - .replace would then crash with "is not a
+    // function" and silently swallow the whole notification.
+    const adminNumber = String(settings.adminNotificationNumber || '').replace(/\D/g, '');
     if (!adminNumber || !sock) return;
 
     const headline = reason === 'price_callback'
