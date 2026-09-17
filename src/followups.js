@@ -25,6 +25,22 @@ function reviewReminderText(template, name) {
 async function runFollowups() {
   const settings = store.getSettings();
 
+  // TEMPORARY DEBUG LOGGING - prints every minute so we can see exactly what
+  // this running process believes its settings and lead timers to be,
+  // instead of guessing. Safe to remove once follow-ups are confirmed working.
+  const debugCutoffMs = (settings.followupDelayHours || 0) * 60 * 60 * 1000;
+  const debugLeads = store.getAllLeads().filter((l) => l.status === 'interested');
+  console.log(`[followups-debug] tick at ${new Date().toISOString()} | followupEnabled=${settings.followupEnabled} followupDelayHours=${settings.followupDelayHours} (cutoffMs=${debugCutoffMs}) followupMaxAttempts=${settings.followupMaxAttempts}`);
+  if (debugLeads.length === 0) {
+    console.log('[followups-debug] no leads with status "interested" found at all.');
+  }
+  for (const l of debugLeads) {
+    const last = l.lastContacted ? new Date(l.lastContacted).getTime() : 0;
+    const elapsedMs = Date.now() - last;
+    const eligible = (l.followupCount || 0) < settings.followupMaxAttempts && elapsedMs >= debugCutoffMs;
+    console.log(`[followups-debug] lead ${l.phone}: status=${l.status} followupCount=${l.followupCount || 0} lastContacted=${l.lastContacted || 'never'} elapsedMs=${elapsedMs} eligible=${eligible}`);
+  }
+
   if (settings.followupEnabled === false) {
     console.log('Follow-ups are paused from the dashboard - skipping this run.');
     return;
@@ -88,12 +104,13 @@ function startFollowupScheduler() {
   // The delay/attempt limits themselves are enforced in the store queries.
   // Each one is caught individually - an error in one must never crash the
   // whole process (which would also kill the live WhatsApp connection).
-  cron.schedule('0 * * * *', () => {
+  cron.schedule('* * * * *', () => {
+    console.log(`[followups-debug] cron tick fired at ${new Date().toISOString()}`);
     runFollowups().catch((err) => console.error('runFollowups crashed:', err));
     runReviewRequests().catch((err) => console.error('runReviewRequests crashed:', err));
     runReviewReminders().catch((err) => console.error('runReviewReminders crashed:', err));
   });
-  console.log('Follow-up scheduler started (hourly).');
+  console.log('Follow-up scheduler started (every minute).');
 }
 
 module.exports = { startFollowupScheduler, runFollowups, runReviewRequests, runReviewReminders };
