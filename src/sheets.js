@@ -104,6 +104,45 @@ function getStatus() {
   return { ...state };
 }
 
+/* ---------------- Critical writes - directly awaited, not queued ----------------
+ * Render's free tier wipes local disk on every restart (redeploy, or
+ * free-tier sleep/wake) and restores from this Sheet if local data is
+ * empty. For MOST writes that's fine (fire-and-forget above, so a slow
+ * Sheet never delays a WhatsApp reply) - a redeploy happening a second
+ * before the background queue flushes just means the customer's carpet
+ * type etc. gets re-asked once, harmless.
+ *
+ * But a few flags are anti-spam gates: if a restart's Sheet-restore rolls
+ * one of these back to a stale value, the customer gets a DUPLICATE
+ * follow-up or review message. Those specific writes are awaited directly
+ * (bypassing the retry queue/backoff) so the caller knows the Sheet is
+ * updated (or knows it failed) before moving on. Best-effort still - if
+ * the Sheet call itself fails, we log and continue rather than throwing,
+ * since local data (source of truth for a live, non-restarted process)
+ * is already correct either way. */
+
+async function syncSettingsAwait(settings) {
+  try {
+    await callScript('updateSettings', { fields: settings }, 15000);
+    return true;
+  } catch (err) {
+    console.error('[sheets] awaited settings sync failed (non-fatal, will retry in background):', err.message);
+    enqueue('updateSettings', { fields: settings }); // fall back to the retry queue
+    return false;
+  }
+}
+
+async function syncLeadAwait(lead) {
+  try {
+    await callScript('upsertLead', { phone: lead.phone, fields: lead }, 15000);
+    return true;
+  } catch (err) {
+    console.error(`[sheets] awaited lead sync failed for ${lead.phone} (non-fatal, will retry in background):`, err.message);
+    enqueue('upsertLead', { phone: lead.phone, fields: lead }); // fall back to the retry queue
+    return false;
+  }
+}
+
 /* ---------------- Session backup/restore - directly awaited, not queued ----------------
  * Restoring must finish before the bot starts, and backing up should be a
  * definite success/failure the caller can react to - so these bypass the
@@ -148,6 +187,8 @@ module.exports = {
   syncDeleteLead,
   syncMessage,
   syncSettings,
+  syncSettingsAwait,
+  syncLeadAwait,
   getStatus,
   saveSessionChunks,
   loadSessionChunks,
