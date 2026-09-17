@@ -170,6 +170,9 @@
         <th>Colour</th>
         <th>Budget</th>
         <th>Preferred time</th>
+        <th>Address</th>
+        <th>Postcode</th>
+        <th>Contact number</th>
         <th>Last contacted</th>
         <th>Change status</th>
         <th></th>
@@ -243,6 +246,9 @@ function render() {
       <td>${escapeHtml(lead.colour || '-')}</td>
       <td>${escapeHtml(lead.budget || '-')}</td>
       <td>${escapeHtml(lead.preferredTime || '-')}</td>
+      <td>${escapeHtml(lead.customerAddress || '-')}</td>
+      <td>${escapeHtml(lead.postcode || '-')}</td>
+      <td>${escapeHtml(lead.contactNumber || '-')}</td>
       <td>${lastContacted}</td>
       <td>
         <select data-phone="${escapeHtml(lead.phone)}" class="status-select">
