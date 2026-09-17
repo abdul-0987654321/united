@@ -51,7 +51,10 @@ async function runFollowups() {
   for (const lead of leads) {
     try {
       await sendWhatsAppMessage(lead.phone, followupText(settings.followupMessage, lead.name));
-      store.upsertLead(lead.phone, {
+      // Awaited sync: followupCount is an anti-spam gate - if a restart's
+      // Sheet-restore rolled it back to a stale value, this customer would
+      // get the same follow-up sent again.
+      await store.upsertLeadAwaitSync(lead.phone, {
         lastContacted: new Date().toISOString(),
         followupCount: Number(lead.followupCount || 0) + 1,
       });
@@ -78,7 +81,11 @@ async function runReviewRequests() {
   for (const lead of leads) {
     try {
       await sendWhatsAppMessage(lead.phone, reviewRequestText(lead.name));
-      store.upsertLead(lead.phone, { reviewSent: true, reviewRequestedAt: new Date().toISOString(), reviewReminderCount: 0 });
+      // Awaited sync: reviewSent is the anti-spam gate for this whole
+      // function - a stale Sheet-restore of it is exactly what caused the
+      // duplicate-review-request bug, so this one must actually land in
+      // the Sheet before we move on.
+      await store.upsertLeadAwaitSync(lead.phone, { reviewSent: true, reviewRequestedAt: new Date().toISOString(), reviewReminderCount: 0 });
       console.log(`Review request sent via WhatsApp to ${lead.phone}`);
     } catch (err) {
       console.error(`Review request failed for ${lead.phone}:`, err);
@@ -98,7 +105,7 @@ async function runReviewReminders() {
   for (const lead of leads) {
     try {
       await sendWhatsAppMessage(lead.phone, reviewReminderText(settings.reviewReminderMessage, lead.name));
-      store.upsertLead(lead.phone, {
+      await store.upsertLeadAwaitSync(lead.phone, {
         reviewRequestedAt: new Date().toISOString(),
         reviewReminderCount: Number(lead.reviewReminderCount || 0) + 1,
       });
