@@ -198,6 +198,9 @@ async function handleIncomingMessage(msg) {
   const budget = ai.budget || lead?.budget || '';
   const preferredTime = ai.preferredTime || lead?.preferredTime || '';
   const name = ai.name || lead?.name || pushName;
+  const customerAddress = ai.customerAddress || lead?.customerAddress || '';
+  const postcode = ai.postcode || lead?.postcode || '';
+  const contactNumber = ai.contactNumber || lead?.contactNumber || '';
   const hasRequiredInfo = Boolean(name && room && (budget || preferredTime));
   const status = computeStatus({ intent: ai.intent, currentStatus: lead?.status, hasRequiredInfo });
 
@@ -211,6 +214,9 @@ async function handleIncomingMessage(msg) {
     colour,
     budget,
     preferredTime,
+    customerAddress,
+    postcode,
+    contactNumber,
     source: lead?.source || 'whatsapp',
     lastContacted: new Date().toISOString(),
     followupCount: 0, // they just replied, so the follow-up clock resets
@@ -218,26 +224,47 @@ async function handleIncomingMessage(msg) {
 
   // Notify the admin once, the moment this lead is fully qualified ("booked").
   if (status === 'booked' && !updatedLead.bookedNotified) {
-    notifyAdmin(updatedLead);
+    notifyAdmin(updatedLead, 'booked');
     store.upsertLead(phone, { bookedNotified: true });
+  }
+
+  // Also notify the admin the moment a customer declines the visit but still
+  // wants pricing - otherwise "the team will call you" would be an empty
+  // promise, since nothing else in the app would ever alert a human to it.
+  if (ai.wantsPriceCallback && !updatedLead.priceCallbackNotified) {
+    notifyAdmin(updatedLead, 'price_callback');
+    store.upsertLead(phone, { priceCallbackNotified: true });
   }
 }
 
-/** Pings the admin's own WhatsApp with a summary of a booked lead. */
-async function notifyAdmin(lead) {
+/**
+ * Pings the admin's own WhatsApp with a summary of a lead.
+ * reason: 'booked' (ready for a measure visit) or 'price_callback' (declined
+ * the visit, just wants someone to call them with a price).
+ */
+async function notifyAdmin(lead, reason = 'booked') {
   try {
     const settings = store.getSettings();
     const adminNumber = (settings.adminNotificationNumber || '').replace(/\D/g, '');
     if (!adminNumber || !sock) return;
 
+    const headline = reason === 'price_callback'
+      ? `Customer wants a PRICE CALL (declined a visit) - ${lead.name || 'Unknown name'} (${lead.phone})`
+      : `Lead ready to book - ${lead.name || 'Unknown name'} (${lead.phone})`;
+
     const lines = [
-      `Lead ready to book - ${lead.name || 'Unknown name'} (${lead.phone})`,
+      headline,
       lead.carpetType ? `Carpet: ${lead.carpetType}` : null,
       lead.room ? `Room: ${lead.room}` : null,
       lead.size ? `Size: ${lead.size}` : null,
       lead.colour ? `Colour: ${lead.colour}` : null,
       lead.budget ? `Budget: ${lead.budget}` : null,
-      `Wants to meet: ${lead.preferredTime || 'no time given yet - ask them'}`,
+      lead.customerAddress ? `Address: ${lead.customerAddress}` : null,
+      lead.postcode ? `Postcode: ${lead.postcode}` : null,
+      lead.contactNumber ? `Contact number given: ${lead.contactNumber}` : null,
+      reason === 'price_callback'
+        ? 'Call them with a price - they did not want a measure visit.'
+        : `Wants to meet: ${lead.preferredTime || 'no time given yet - ask them'}`,
     ].filter(Boolean);
 
     await sock.sendMessage(`${adminNumber}@s.whatsapp.net`, { text: lines.join('\n') });
