@@ -4,6 +4,7 @@ const {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  Browsers,
 } = require('@itsliaaa/baileys');
 const QRCode = require('qrcode');
 const pino = require('pino');
@@ -225,6 +226,21 @@ let credsBackupTimer = null;
 
 function isConnected() {
   return connectionStatus === 'connected' && Boolean(sock && sock.user && sock.user.id);
+}
+
+/**
+ * WhatsApp rejects the pairing-code flow when the browser identifier is a
+ * made-up name - that produces "Couldn't link device, check the phone number
+ * or get a new code" on the phone, even when the number and code are right.
+ * A standard identifier is required. QR linking doesn't care, so the custom
+ * name is only used when we're not pairing by number.
+ */
+function browserSignature(usingPairingCode) {
+  if (usingPairingCode) {
+    if (Browsers && typeof Browsers.ubuntu === 'function') return Browsers.ubuntu('Chrome');
+    return ['Ubuntu', 'Chrome', '110.0.5585.95'];
+  }
+  return ['KSC Carpets Bot', 'Chrome', '120.0.0'];
 }
 
 function disconnectReasonName(statusCode) {
@@ -455,6 +471,8 @@ async function startWhatsApp() {
       version = [2, 3000, 1015901307];
     }
 
+    const usingPairingCode = Boolean(!alreadyPaired && pendingPairingNumber);
+
     connectionStatus = 'connecting';
     sock = makeWASocket({
       version,
@@ -462,7 +480,7 @@ async function startWhatsApp() {
       printQRInTerminal: false,
       markOnlineOnConnect: false,
       syncFullHistory: false,
-      browser: ['KSC Carpets Bot', 'Chrome', '120.0.0'],
+      browser: browserSignature(usingPairingCode),
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -470,28 +488,8 @@ async function startWhatsApp() {
     });
 
     pairingRequestedForThisSocket = false;
-
-    // --- Phone-number pairing code (alternative to scanning a QR) ---
-    if (!alreadyPaired && pendingPairingNumber) {
-      const numberForPairing = pendingPairingNumber;
-      const socketForPairing = sock;
-      setTimeout(async () => {
-        if (pairingRequestedForThisSocket || socketForPairing !== sock) return;
-        pairingRequestedForThisSocket = true;
-        try {
-          if (typeof sock.requestPairingCode !== 'function') {
-            throw new Error('This Baileys build does not expose requestPairingCode - use the QR code instead.');
-          }
-          const raw = await sock.requestPairingCode(numberForPairing);
-          const formatted = String(raw).replace(/\s|-/g, '').match(/.{1,4}/g).join('-');
-          latestPairingCode = formatted;
-          latestPairingCodeAt = new Date().toISOString();
-          log.logInfo('whatsapp', `Pairing code ready for +${numberForPairing}: ${formatted}`);
-        } catch (err) {
-          latestPairingCode = null;
-          log.logError('whatsapp', err, `Requesting a pairing code for +${numberForPairing} failed`);
-        }
-      }, 3500);
+    if (usingPairingCode) {
+      log.logInfo('whatsapp', `Pairing-code mode for +${pendingPairingNumber} (browser id: ${JSON.stringify(browserSignature(true))}).`);
     }
 
     sock.ev.on('creds.update', async () => {
@@ -515,6 +513,32 @@ async function startWhatsApp() {
       if (qr) {
         connectionStatus = 'connecting';
         latestQrAt = new Date().toISOString();
+
+        // The arrival of a QR is the reliable signal that the socket is up and
+        // ready to accept a pairing-code request. Asking on a fixed timer (the
+        // old behaviour) could fire before the socket was ready, which
+        // produced a code the phone then refused.
+        if (pendingPairingNumber && !pairingRequestedForThisSocket) {
+          pairingRequestedForThisSocket = true;
+          const numberForPairing = pendingPairingNumber;
+          const socketForPairing = sock;
+          try {
+            if (typeof sock.requestPairingCode !== 'function') {
+              throw new Error('This Baileys build does not expose requestPairingCode - use the QR code instead.');
+            }
+            const raw = await sock.requestPairingCode(numberForPairing);
+            if (socketForPairing === sock) {
+              const formatted = String(raw).replace(/[\s-]/g, '').match(/.{1,4}/g).join('-');
+              latestPairingCode = formatted;
+              latestPairingCodeAt = new Date().toISOString();
+              log.logInfo('whatsapp', `Pairing code ready for +${numberForPairing}: ${formatted} (valid for a couple of minutes).`);
+            }
+          } catch (err) {
+            latestPairingCode = null;
+            log.logError('whatsapp', err, `Requesting a pairing code for +${numberForPairing} failed`);
+          }
+        }
+
         try {
           console.log(await QRCode.toString(qr, { type: 'terminal', small: true }));
           console.log('Scan the QR above with the KSC Carpets WhatsApp number (or use the pairing code on the dashboard).');
