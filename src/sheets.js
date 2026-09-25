@@ -7,11 +7,15 @@
  * instant). This file just best-effort mirrors every write to the Sheet
  * in the background, with its own retry queue, so a slow or unreachable
  * Sheet never slows down or breaks the bot itself.
+ *
+ * The session backup/restore calls at the bottom are the exception: those
+ * are awaited, because the WhatsApp login itself depends on them.
  */
 
 const fetch = require('node-fetch');
 const https = require('https');
 const config = require('./config');
+const log = require('./errors');
 
 const { webAppUrl, secret } = config.sheets;
 
@@ -38,7 +42,16 @@ async function callScript(action, payload = {}, timeoutMs = 10000) {
       agent: ipv4Agent,
       signal: controller.signal,
     });
-    const json = await res.json();
+    if (!res.ok) throw new Error(`Apps Script replied HTTP ${res.status} for "${action}"`);
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (err) {
+      // Usually means the Web App URL is wrong, the deployment is stale, or
+      // Google returned an HTML sign-in page instead of JSON.
+      throw new Error(`Apps Script did not return JSON for "${action}" - check SHEETS_WEBAPP_URL and that the deployment is "Anyone" access. First 120 chars: ${text.slice(0, 120)}`);
+    }
     if (!json.ok) throw new Error(json.error || `Sheet action "${action}" failed`);
     return json.data;
   } finally {
@@ -71,7 +84,7 @@ async function runWorker() {
           state.queued = queue.length;
           await sleep(2000 * job.attempt * job.attempt); // ~2s, 8s, 18s
         } else {
-          console.error(`[sheets] giving up on "${job.action}" after ${job.attempt} attempts: ${err.message}`);
+          log.logError('sheets', err, `Gave up on "${job.action}" after ${job.attempt} attempts`);
         }
       }
       await sleep(300); // be gentle on Apps Script's quota
@@ -104,30 +117,15 @@ function getStatus() {
   return { ...state };
 }
 
-/* ---------------- Critical writes - directly awaited, not queued ----------------
- * Render's free tier wipes local disk on every restart (redeploy, or
- * free-tier sleep/wake) and restores from this Sheet if local data is
- * empty. For MOST writes that's fine (fire-and-forget above, so a slow
- * Sheet never delays a WhatsApp reply) - a redeploy happening a second
- * before the background queue flushes just means the customer's carpet
- * type etc. gets re-asked once, harmless.
- *
- * But a few flags are anti-spam gates: if a restart's Sheet-restore rolls
- * one of these back to a stale value, the customer gets a DUPLICATE
- * follow-up or review message. Those specific writes are awaited directly
- * (bypassing the retry queue/backoff) so the caller knows the Sheet is
- * updated (or knows it failed) before moving on. Best-effort still - if
- * the Sheet call itself fails, we log and continue rather than throwing,
- * since local data (source of truth for a live, non-restarted process)
- * is already correct either way. */
+/* ---------------- Critical writes - directly awaited, not queued ---------------- */
 
 async function syncSettingsAwait(settings) {
   try {
     await callScript('updateSettings', { fields: settings }, 15000);
     return true;
   } catch (err) {
-    console.error('[sheets] awaited settings sync failed (non-fatal, will retry in background):', err.message);
-    enqueue('updateSettings', { fields: settings }); // fall back to the retry queue
+    log.logError('sheets', err, 'Awaited settings sync failed (non-fatal, falling back to the retry queue)');
+    enqueue('updateSettings', { fields: settings });
     return false;
   }
 }
@@ -137,38 +135,40 @@ async function syncLeadAwait(lead) {
     await callScript('upsertLead', { phone: lead.phone, fields: lead }, 15000);
     return true;
   } catch (err) {
-    console.error(`[sheets] awaited lead sync failed for ${lead.phone} (non-fatal, will retry in background):`, err.message);
-    enqueue('upsertLead', { phone: lead.phone, fields: lead }); // fall back to the retry queue
+    log.logError('sheets', err, `Awaited lead sync failed for ${lead.phone} (non-fatal, falling back to the retry queue)`);
+    enqueue('upsertLead', { phone: lead.phone, fields: lead });
     return false;
   }
 }
 
 /* ---------------- Session backup/restore - directly awaited, not queued ----------------
- * Restoring must finish before the bot starts, and backing up should be a
+ * Restoring must finish before the bot starts, and backing up must be a
  * definite success/failure the caller can react to - so these bypass the
- * background queue and call the script directly. */
+ * background queue and call the script directly.
+ *
+ * saveSession now sends the whole payload in one go and the Apps Script side
+ * writes it in a single setValues() call. The old version cleared the Session
+ * tab first and then appended one row at a time, which timed out on big
+ * payloads and left the tab EMPTY - the reason redeploys kept coming back to
+ * a QR screen. */
 
-async function saveSessionChunks(chunks) {
-  return callScript('saveSession', { chunks }, 40000);
+async function saveSessionChunks(chunks, meta = {}) {
+  return callScript('saveSession', { chunks, meta }, 60000);
 }
 
 async function loadSessionChunks() {
-  const data = await callScript('loadSession', {}, 40000);
-  return data?.chunks || [];
+  const data = await callScript('loadSession', {}, 60000);
+  return {
+    chunks: (data && data.chunks) || [],
+    meta: (data && data.meta) || null,
+  };
 }
 
 async function clearSessionRemote() {
-  try {
-    await callScript('clearSession', {}, 15000);
-  } catch (err) {
-    console.error('Clearing remote session backup failed (non-fatal):', err.message);
-  }
+  await callScript('clearSession', {}, 20000);
 }
 
-/* ---------------- Full restore from Sheet - used once at startup if local data is missing ----------------
- * Same "directly awaited, not queued" reasoning as the session restore above:
- * this needs a definite success/failure before the app decides whether it
- * has data to serve. */
+/* ---------------- Full restore from Sheet - used once at startup if local data is missing ---------------- */
 
 async function loadAllLeadsFromSheet() {
   return callScript('getAllLeads', {}, 30000);
@@ -182,6 +182,11 @@ async function loadSettingsFromSheet() {
   return callScript('getSettings', {}, 20000);
 }
 
+/** Used by the dashboard to prove the backup is actually there. */
+async function getSessionInfo() {
+  return callScript('sessionInfo', {}, 20000);
+}
+
 module.exports = {
   syncLead,
   syncDeleteLead,
@@ -193,6 +198,7 @@ module.exports = {
   saveSessionChunks,
   loadSessionChunks,
   clearSessionRemote,
+  getSessionInfo,
   loadAllLeadsFromSheet,
   loadAllMessagesFromSheet,
   loadSettingsFromSheet,
