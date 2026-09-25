@@ -112,42 +112,77 @@
   .banner.show { display: block; }
   .banner.bad { background: #fdeaea; color: var(--danger); }
   .banner.good { background: #e3f4ec; color: var(--accent-dark); }
+  .big-status { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  .big-status .status-dot { width: 12px; height: 12px; margin: 0; }
+  .status-help { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .how { background: #f1f0ec; border-radius: 8px; padding: 11px 14px; font-size: 13px; line-height: 1.6; margin: 14px 0; }
+  .how b { font-weight: 600; }
+  details.tech { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+  details.tech summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); }
+  details.tech .inner { padding-top: 12px; }
+  .topbar { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 20px; font-size: 12.5px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); margin-left: auto; }
+  .pill .status-dot { margin: 0; }
+  .alert { display: none; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; background: #fdeaea; color: var(--danger); font-size: 13px; font-weight: 600; margin-bottom: 16px; flex-wrap: wrap; }
+  .alert.show { display: flex; }
+  .alert button { margin-left: auto; }
 </style>
 </head>
 <body>
-  <h1>KSC Carpets - Leads</h1>
-  <div class="sub">WhatsApp enquiries, auto-updated and answered by AI.</div>
+  <div class="topbar">
+    <div>
+      <h1>KSC Carpets - Leads</h1>
+      <div class="sub" style="margin-bottom:0">WhatsApp enquiries, auto-updated and answered by AI.</div>
+    </div>
+    <!-- At-a-glance status. Everything technical lives in the Settings tab, so
+         this pill is the only connection info on the leads screen. -->
+    <span class="pill"><span class="status-dot" id="headerDot"></span><span id="headerStatus">Checking...</span></span>
+  </div>
+
+  <!-- Only ever shown when the bot genuinely cannot work. Otherwise the client
+       never sees anything about sessions, codes or errors. -->
+  <div class="alert" id="topAlert">
+    <span id="topAlertText"></span>
+    <button class="save-btn danger" id="goToSettingsBtn">Fix it</button>
+  </div>
+
+  <div class="tabs">
+    <button data-tab="leads" class="active">Leads</button>
+    <button data-tab="chats">Chats</button>
+    <button data-tab="settings">Settings</button>
+  </div>
+
+  <div id="settingsView" style="display:none">
 
   <div class="panel">
-    <p class="panel-title">Connection</p>
+    <p class="panel-title">WhatsApp connection</p>
 
-    <div class="banner bad" id="relinkBanner"></div>
-
-    <div class="panel-row">
-      <span><span class="status-dot" id="statusDot"></span><span class="status-text" id="statusText">Checking...</span></span>
-      <span class="meta-line" id="connectedAs"></span>
-      <button class="save-btn danger" id="relinkBtn" style="margin-left:auto;">Relink WhatsApp</button>
+    <div class="big-status">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusHeadline">Checking...</span>
     </div>
-
-    <div class="panel-row" style="display:block">
-      <div class="meta-line" id="sessionInfo"></div>
-      <div class="meta-line" id="lastDisconnect" style="margin-top:4px;"></div>
-    </div>
+    <div class="status-help" id="statusHelp"></div>
 
     <div id="linkArea" style="display:none">
+      <div class="how">
+        <b>On the KSC Carpets phone:</b> open WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; <b>Link a device</b>.<br>
+        Then use one of the two options below.
+      </div>
+
       <div class="link-tabs">
-        <button data-link="qr" class="active">QR code</button>
-        <button data-link="code">Pairing code</button>
+        <button data-link="qr" class="active">Scan a QR code</button>
+        <button data-link="code">Type a code instead</button>
       </div>
 
       <div id="linkQr" class="qr-box">
-        <p>On the KSC Carpets phone: WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a device, then scan this.</p>
+        <p>Point the phone's camera at this square. It refreshes every few seconds - always use the one on screen.</p>
         <img id="qrImage" style="width:220px; height:220px; border:1px solid var(--line); border-radius:8px; display:none;">
         <p id="qrWaiting">Waiting for a QR code...</p>
       </div>
 
       <div id="linkCode" style="display:none">
-        <span class="field-label">WhatsApp number of the KSC Carpets phone (country code, digits only - e.g. 447911123456)</span>
+        <p class="status-help">Use this when the phone isn't in front of you. On the phone, tap <b>Link with phone number instead</b> first, then press the button here.</p>
+        <span class="field-label">The KSC Carpets WhatsApp number - country code, digits only (e.g. 447911123456)</span>
         <div class="panel-row" style="margin-top:0">
           <input type="text" id="pairNumber" placeholder="447911123456" style="max-width:260px">
           <button class="save-btn" id="pairBtn">Get pairing code</button>
@@ -157,16 +192,27 @@
           <div class="pair-code" id="pairCode"></div>
           <div class="meta-line" id="pairAge" style="margin-top:6px;"></div>
           <ol class="steps">
-            <li><b>Open the linking screen on the phone first</b>, then press "Get pairing code" here.</li>
-            <li>On the KSC Carpets phone open WhatsApp.</li>
-            <li>Settings &gt; Linked Devices &gt; Link a device.</li>
-            <li>Tap <b>Link with phone number instead</b>.</li>
-            <li>Type the code above. It expires in a few minutes - get a new one if it does.</li>
+            <li>Make sure the phone is already on the "Enter code" screen.</li>
+            <li>Type the code above - it expires in about two minutes.</li>
+            <li>If it's refused, press "Get pairing code" again for a fresh one.</li>
           </ol>
         </div>
         <div class="meta-line" id="pairError" style="color:var(--danger); margin-top:8px;"></div>
       </div>
     </div>
+
+    <details class="tech">
+      <summary>Technical details</summary>
+      <div class="inner">
+        <div class="meta-line" id="connectedAs"></div>
+        <div class="meta-line" id="sessionInfo" style="margin-top:4px;"></div>
+        <div class="meta-line" id="lastDisconnect" style="margin-top:4px;"></div>
+        <div class="panel-row" style="margin-top:12px">
+          <button class="save-btn secondary" id="backupNowBtn">Back up session now</button>
+          <button class="save-btn danger" id="relinkBtn">Unlink &amp; start over</button>
+        </div>
+      </div>
+    </details>
   </div>
 
   <div class="panel">
@@ -217,10 +263,7 @@
     <div class="log" id="logBox"></div>
   </div>
 
-  <div class="tabs">
-    <button data-tab="leads" class="active">Leads</button>
-    <button data-tab="chats">Chats</button>
-  </div>
+  </div><!-- /settingsView -->
 
   <div id="leadsView">
   <div class="filters" id="filters">
@@ -371,11 +414,45 @@ async function loadStatus() {
   if (!res.ok) return;
   const s = await res.json();
 
+  // Plain-language status first - the client should never have to decode a
+  // status code to know whether the bot is answering customers right now.
   const dot = document.getElementById('statusDot');
-  const text = document.getElementById('statusText');
   dot.className = 'status-dot ' + s.whatsapp;
-  text.textContent = 'WhatsApp: ' + s.whatsapp;
-  document.getElementById('connectedAs').innerHTML = s.me ? `Linked number: <b>${escapeHtml(String(s.me).split(':')[0])}</b>` : '';
+
+  // Header pill + alert: the only connection signals on the Leads screen.
+  document.getElementById('headerDot').className = 'status-dot ' + s.whatsapp;
+  document.getElementById('headerStatus').textContent = s.connected
+    ? 'WhatsApp connected'
+    : (s.needsRelink ? 'WhatsApp not linked' : 'WhatsApp reconnecting');
+
+  const alertBox = document.getElementById('topAlert');
+  if (!s.connected && s.needsRelink) {
+    alertBox.classList.add('show');
+    document.getElementById('topAlertText').textContent =
+      'WhatsApp is not linked - new enquiries are not being answered.';
+  } else {
+    alertBox.classList.remove('show');
+  }
+
+  const headline = document.getElementById('statusHeadline');
+  const help = document.getElementById('statusHelp');
+  if (s.connected) {
+    headline.textContent = 'Connected';
+    help.innerHTML = s.me
+      ? `The bot is answering customers on <b>${escapeHtml(String(s.me).split(':')[0])}</b>.`
+      : 'The bot is answering customers.';
+  } else if (s.needsRelink) {
+    headline.textContent = 'Not linked';
+    help.textContent = 'The bot cannot send or receive anything until the phone is linked again. Follow the steps below.';
+  } else if (s.whatsapp === 'connecting') {
+    headline.textContent = 'Reconnecting...';
+    help.textContent = 'Trying to get back on. This usually sorts itself out in a minute.';
+  } else {
+    headline.textContent = 'Disconnected';
+    help.textContent = 'The bot is not answering customers right now.';
+  }
+
+  document.getElementById('connectedAs').innerHTML = s.me ? `Linked number: <b>${escapeHtml(String(s.me).split(':')[0])}</b>` : 'No number linked.';
 
   const sess = s.session || {};
   let sessionLine = `Session backup in Google Sheet: <b>${sess.lastBackupAt ? when(sess.lastBackupAt) : 'not backed up yet'}</b>`;
@@ -387,14 +464,6 @@ async function loadStatus() {
   document.getElementById('lastDisconnect').innerHTML = ld
     ? `Last disconnect: <b>${escapeHtml(String(ld.reason))}</b> (code ${escapeHtml(String(ld.statusCode))}) at ${when(ld.at)} &middot; ${escapeHtml(ld.message || '')}`
     : '';
-
-  const banner = document.getElementById('relinkBanner');
-  if (s.needsRelink && !s.connected) {
-    banner.className = 'banner bad show';
-    banner.textContent = 'WhatsApp is not linked. Scan the QR code below, or use a pairing code, on the KSC Carpets phone.';
-  } else {
-    banner.className = 'banner bad';
-  }
 
   document.getElementById('linkArea').style.display = s.connected ? 'none' : 'block';
 
@@ -416,9 +485,25 @@ async function loadStatus() {
 
 document.getElementById('relinkBtn').addEventListener('click', async (e) => {
   if (!confirm('This disconnects the current WhatsApp session and asks for a new QR / pairing code. Continue?')) return;
-  e.target.disabled = true; e.target.textContent = 'Relinking...';
+  e.target.disabled = true; e.target.textContent = 'Unlinking...';
   await fetch('/api/whatsapp/relink', { method: 'POST' });
-  setTimeout(() => { e.target.disabled = false; e.target.textContent = 'Relink WhatsApp'; loadStatus(); }, 3000);
+  setTimeout(() => { e.target.disabled = false; e.target.textContent = 'Unlink & start over'; loadStatus(); }, 3000);
+});
+
+// Forces a session backup right now - the thing to press straight after a
+// fresh link, to confirm the Sheet really has the session before any restart.
+document.getElementById('backupNowBtn').addEventListener('click', async (e) => {
+  e.target.disabled = true; e.target.textContent = 'Backing up...';
+  try {
+    const res = await fetch('/api/whatsapp/backup-session', { method: 'POST' });
+    const data = await res.json();
+    alert(data.ok ? 'Session backed up to the Google Sheet.' : 'Backup did not run - see Activity & errors below.');
+  } catch (err) {
+    alert('Backup failed: ' + err.message);
+  } finally {
+    e.target.disabled = false; e.target.textContent = 'Back up session now';
+    loadStatus(); loadLog();
+  }
 });
 
 document.getElementById('pairBtn').addEventListener('click', async (e) => {
@@ -530,15 +615,29 @@ document.getElementById('runNowBtn').addEventListener('click', async (e) => {
 
 /* ----------------------------- Chats ----------------------------- */
 
-document.querySelectorAll('.tabs button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.dataset.tab;
-    document.getElementById('leadsView').style.display = tab === 'leads' ? '' : 'none';
-    document.getElementById('chatsView').style.display = tab === 'chats' ? '' : 'none';
-    if (tab === 'chats') loadChats();
+/**
+ * The dashboard opens on Leads and stays there. Connection, bot controls,
+ * the admin number and the error log all live behind the Settings tab, so the
+ * day-to-day user only ever sees their enquiries.
+ */
+function showTab(tab) {
+  document.querySelectorAll('.tabs button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.tab === tab);
   });
+  document.getElementById('leadsView').style.display = tab === 'leads' ? '' : 'none';
+  document.getElementById('chatsView').style.display = tab === 'chats' ? '' : 'none';
+  document.getElementById('settingsView').style.display = tab === 'settings' ? '' : 'none';
+  if (tab === 'chats') loadChats();
+  if (tab === 'settings') { loadStatus(); loadLog(); }
+}
+
+document.querySelectorAll('.tabs button').forEach((btn) => {
+  btn.addEventListener('click', () => showTab(btn.dataset.tab));
+});
+
+document.getElementById('goToSettingsBtn').addEventListener('click', () => {
+  showTab('settings');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
 let allChats = [];
