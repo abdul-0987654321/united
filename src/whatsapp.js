@@ -326,8 +326,13 @@ async function handleIncomingMessage(msg) {
   if (settings.botEnabled === false) return;
   if (lead?.humanTakeover === true) return;
 
-  sock.readMessages([msg.key]).catch(() => {});
-  sock.sendPresenceUpdate('composing', jid).catch(() => {});
+  // Blue ticks after a short pause, not the instant the message lands.
+  // Reading a message in zero milliseconds is one of the clearest automation
+  // tells, so wait ~1.5s, then mark as read and start "typing...".
+  setTimeout(() => {
+    sock.readMessages([msg.key]).catch(() => {});
+    sock.sendPresenceUpdate('composing', jid).catch(() => {});
+  }, 1500);
 
   const history = pushHistory(phone, 'user', text);
 
