@@ -2,23 +2,25 @@ const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const config = require('./config');
-const { startWhatsApp, getConnectionStatus, getLatestQr, resetConnection, sendManualMessage } = require('./whatsapp');
+const log = require('./errors');
+const {
+  startWhatsApp,
+  getStatusPayload,
+  resetConnection,
+  startPairingWithNumber,
+  switchToQrMode,
+  sendManualMessage,
+  backupSessionToSheet,
+} = require('./whatsapp');
 const { startFollowupScheduler, runFollowups, runReviewRequests, runReviewReminders } = require('./followups');
+const sheets = require('./sheets');
 const store = require('./store');
 
-// A single unhandled error anywhere in the app must never be allowed to
-// silently kill the whole process - that would also drop the live WhatsApp
-// connection and force a full reconnect/re-pair for no good reason.
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled promise rejection (process kept alive):', err);
-});
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception (process kept alive):', err);
-});
+// Records anything that escaped a try/catch and keeps the process alive - a
+// crash here would also drop the live WhatsApp connection.
+log.installProcessHandlers();
 
 const COOKIE_NAME = 'ksc_auth';
-// Derived from the password itself - no separate session store needed, and
-// changing DASHBOARD_PASSWORD automatically invalidates any old cookie.
 const AUTH_TOKEN = crypto.createHash('sha256').update(config.dashboard.password).digest('hex');
 
 function parseCookies(req) {
@@ -42,25 +44,29 @@ function requireDashboardAuth(req, res, next) {
 }
 
 async function main() {
-  console.log(`Starting bot for ${config.business.name}...`);
+  log.logInfo('startup', `Starting the bot for ${config.business.name}...`);
 
   await store.restoreFromSheetIfNeeded();
-
   await startWhatsApp();
   startFollowupScheduler();
 
-  // Render (and most hosts) require an open HTTP port to keep the service alive.
-  // This also gives you a place to hang the real dashboard later.
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
-  app.get('/', (req, res) => {
-    res.redirect('/dashboard');
-  });
+  app.get('/', (req, res) => res.redirect('/dashboard'));
 
+  // Keep this public and cheap - it's what an uptime pinger (UptimeRobot etc.)
+  // hits every few minutes to stop Render's free tier spinning the app down.
   app.get('/health', (req, res) => {
-    res.json({ ok: true, business: config.business.name });
+    const status = getStatusPayload();
+    res.json({
+      ok: true,
+      business: config.business.name,
+      whatsapp: status.whatsapp,
+      connected: status.connected,
+      time: new Date().toISOString(),
+    });
   });
 
   app.get('/login', (req, res) => {
@@ -84,25 +90,10 @@ async function main() {
     res.sendFile(path.join(__dirname, '..', 'public', 'dashboard.html'));
   });
 
-  // Everything below reads/writes the local store (instant) - the Google
-  // Sheet is a background mirror only and never sits on these paths.
+  /* ------------------------- Leads / chats / settings ------------------------- */
 
   app.get('/api/leads', requireDashboardAuth, (req, res) => {
     res.json(store.getAllLeads());
-  });
-
-  app.get('/api/status', requireDashboardAuth, (req, res) => {
-    res.json({ whatsapp: getConnectionStatus(), qr: getLatestQr() });
-  });
-
-  app.post('/api/whatsapp/relink', requireDashboardAuth, async (req, res) => {
-    try {
-      await resetConnection();
-      res.json({ ok: true });
-    } catch (err) {
-      console.error('Relink failed:', err);
-      res.status(500).json({ error: 'Relink failed' });
-    }
   });
 
   app.get('/api/settings', requireDashboardAuth, (req, res) => {
@@ -110,13 +101,13 @@ async function main() {
   });
 
   app.post('/api/settings', requireDashboardAuth, async (req, res) => {
-    // Awaited so the Sheet mirror is actually done before this responds -
-    // if a redeploy happens moments after saving, the next restart's
-    // Sheet-restore won't roll the setting back to a stale value. A
-    // dashboard save is an infrequent admin action, so the extra second or
-    // two is fine here (unlike the hot WhatsApp chat-reply path).
-    const updated = await store.updateSettingsAwaitSync(req.body);
-    res.json(updated);
+    try {
+      const updated = await store.updateSettingsAwaitSync(req.body);
+      res.json(updated);
+    } catch (err) {
+      log.logError('dashboard', err, 'Saving settings failed');
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post('/api/leads/:phone/status', requireDashboardAuth, (req, res) => {
@@ -145,8 +136,8 @@ async function main() {
       await sendManualMessage(req.params.phone, req.body.text);
       res.json({ ok: true });
     } catch (err) {
-      console.error('Failed to send manual message:', err);
-      res.status(500).json({ error: 'Failed to send message' });
+      log.logError('dashboard', err, `Manual message to ${req.params.phone} failed`);
+      res.status(500).json({ error: err.message });
     }
   });
 
@@ -157,17 +148,96 @@ async function main() {
       await runReviewReminders();
       res.json({ ok: true });
     } catch (err) {
-      console.error('Manual run-now failed:', err);
-      res.status(500).json({ error: 'Run failed' });
+      log.logError('dashboard', err, 'Manual "run now" failed');
+      res.status(500).json({ error: err.message });
     }
   });
 
+  /* ------------------------- WhatsApp connection ------------------------- */
+
+  app.get('/api/status', requireDashboardAuth, (req, res) => {
+    res.json({ ...getStatusPayload(), sheetsQueue: sheets.getStatus(), errorCounts: log.getCounts() });
+  });
+
+  // Full relink: clears the session locally and in the Sheet, comes back on QR.
+  app.post('/api/whatsapp/relink', requireDashboardAuth, async (req, res) => {
+    try {
+      await resetConnection();
+      res.json({ ok: true });
+    } catch (err) {
+      log.logError('dashboard', err, 'Relink failed');
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Phone-number pairing code, as an alternative to scanning a QR.
+  app.post('/api/whatsapp/pairing-code', requireDashboardAuth, async (req, res) => {
+    try {
+      const code = await startPairingWithNumber(req.body.number);
+      res.json({ ok: true, code });
+    } catch (err) {
+      log.logError('dashboard', err, 'Requesting a pairing code failed');
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/whatsapp/use-qr', requireDashboardAuth, async (req, res) => {
+    try {
+      await switchToQrMode();
+      res.json({ ok: true });
+    } catch (err) {
+      log.logError('dashboard', err, 'Switching to QR mode failed');
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Manual "back up the session now" - handy right after a fresh pairing.
+  app.post('/api/whatsapp/backup-session', requireDashboardAuth, async (req, res) => {
+    try {
+      const ok = await backupSessionToSheet('manual backup from the dashboard');
+      res.json({ ok, ...getStatusPayload().session });
+    } catch (err) {
+      log.logError('dashboard', err, 'Manual session backup failed');
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Proves the backup actually exists in the Sheet.
+  app.get('/api/whatsapp/session-info', requireDashboardAuth, async (req, res) => {
+    try {
+      res.json(await sheets.getSessionInfo());
+    } catch (err) {
+      log.logError('dashboard', err, 'Reading session info from the Sheet failed');
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  /* ------------------------- Error log ------------------------- */
+
+  app.get('/api/errors', requireDashboardAuth, (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 100, 300);
+    const level = req.query.level || null;
+    res.json({ counts: log.getCounts(), entries: log.getEntries(limit, level) });
+  });
+
+  app.post('/api/errors/clear', requireDashboardAuth, (req, res) => {
+    res.json(log.clear());
+  });
+
+  /* ------------------------- Express error handler ------------------------- */
+
+  app.use((err, req, res, next) => {
+    log.logError('dashboard', err, `Unhandled error on ${req.method} ${req.path}`);
+    if (res.headersSent) return next(err);
+    res.status(500).json({ error: err.message });
+  });
+
   app.listen(config.port, () => {
-    console.log(`Server listening on port ${config.port}`);
+    log.logInfo('startup', `Server listening on port ${config.port}.`);
   });
 }
 
 main().catch((err) => {
-  console.error('Fatal startup error:', err);
+  log.logError('startup', err, 'Fatal startup error');
   process.exit(1);
 });
