@@ -14,6 +14,7 @@
     --line: #e7e5e0;
     --surface: #ffffff;
     --bg: #f6f5f1;
+    --danger: #a5342f;
   }
   * { box-sizing: border-box; }
   body { font-family: 'Inter', -apple-system, Arial, sans-serif; background: var(--bg); margin: 0; padding: 28px; color: var(--ink); }
@@ -31,7 +32,7 @@
   .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 600; }
   .badge.new { background: #e6f0ff; color: #1a56b0; }
   .badge.interested { background: #e3f4ec; color: var(--accent-dark); }
-  .badge.not_interested { background: #fdeaea; color: #a5342f; }
+  .badge.not_interested { background: #fdeaea; color: var(--danger); }
   .badge.booked { background: #fff4e0; color: #a56b0c; }
   .badge.completed { background: #ececea; color: #555; }
   .empty { padding: 48px; text-align: center; color: var(--muted); font-size: 13px; }
@@ -45,6 +46,8 @@
   .status-dot.disconnected { background: #c94b3f; }
   .status-dot.connecting { background: #c9963f; }
   .status-text { font-size: 13px; font-weight: 600; }
+  .meta-line { font-size: 12px; color: var(--muted); }
+  .meta-line b { color: var(--ink); font-weight: 600; }
   .switch { position: relative; width: 38px; height: 21px; display: inline-block; flex-shrink: 0; }
   .switch input { opacity: 0; width: 0; height: 0; }
   .slider { position: absolute; inset: 0; background: #d8d6d0; border-radius: 22px; cursor: pointer; transition: .2s; }
@@ -56,17 +59,21 @@
   input[type="text"] { min-height: unset; }
   input[type="text"]:focus, textarea:focus { outline: none; border-color: var(--accent); background: #fff; }
   .field-label { font-size: 12px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 6px; }
-  input[type="number"] { width: 64px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
   .save-btn { padding: 8px 16px; border: none; background: var(--accent); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: .15s; }
   .save-btn:hover { background: var(--accent-dark); }
-  .save-btn.danger { background: #a5342f; }
+  .save-btn.danger { background: var(--danger); }
   .save-btn.danger:hover { background: #7e2721; }
   .save-btn.secondary { background: #edece8; color: var(--ink); }
   .save-btn.secondary:hover { background: #e2e0da; }
   .save-btn:disabled { opacity: 0.5; cursor: default; }
   .saved-note { font-size: 12px; color: var(--accent-dark); font-weight: 600; }
-  .qr-box { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 4px; }
+  .link-tabs { display: inline-flex; gap: 2px; margin-bottom: 14px; background: #ece9e3; padding: 4px; border-radius: 10px; }
+  .link-tabs button { padding: 6px 16px; border: none; background: transparent; font-size: 12.5px; font-weight: 600; cursor: pointer; border-radius: 7px; color: var(--muted); }
+  .link-tabs button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .qr-box { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
   .qr-box p { font-size: 12px; color: var(--muted); margin: 0; }
+  .pair-code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 30px; font-weight: 700; letter-spacing: 4px; background: #f1f0ec; padding: 12px 18px; border-radius: 10px; display: inline-block; }
+  .steps { font-size: 12px; color: var(--muted); margin: 8px 0 0; padding-left: 18px; line-height: 1.7; }
   .tabs { display: inline-flex; gap: 2px; margin-bottom: 16px; background: #ece9e3; padding: 4px; border-radius: 10px; }
   .tabs button { padding: 7px 18px; border: none; background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 7px; color: var(--muted); transition: .15s; }
   .tabs button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
@@ -88,8 +95,23 @@
   .chat-input { display: flex; gap: 8px; padding: 14px; border-top: 1px solid var(--line); }
   .chat-input input { flex: 1; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
   .chat-input button { padding: 9px 18px; border: none; background: var(--accent); color: #fff; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
-  .chat-input:disabled, .chat-input.disabled input, .chat-input.disabled button { opacity: 0.5; }
   .takeover-note { font-size: 11.5px; color: var(--muted); padding: 0 14px 12px; }
+  .log { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: #fbfbf9; }
+  .log-row { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 12px; display: flex; gap: 10px; align-items: flex-start; }
+  .log-row:last-child { border-bottom: none; }
+  .log-row .when { color: var(--muted); white-space: nowrap; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; }
+  .log-row .tag { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+  .log-row.error .tag { background: #fdeaea; color: var(--danger); }
+  .log-row.warn .tag { background: #fff4e0; color: #a56b0c; }
+  .log-row.info .tag { background: #ececea; color: #555; }
+  .log-row .body { flex: 1; word-break: break-word; }
+  .log-row .scope { font-weight: 600; margin-right: 6px; }
+  .log-row details summary { cursor: pointer; color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .log-row pre { white-space: pre-wrap; font-size: 11px; color: var(--muted); margin: 6px 0 0; }
+  .banner { padding: 10px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 500; margin-bottom: 12px; display: none; }
+  .banner.show { display: block; }
+  .banner.bad { background: #fdeaea; color: var(--danger); }
+  .banner.good { background: #e3f4ec; color: var(--accent-dark); }
 </style>
 </head>
 <body>
@@ -98,13 +120,50 @@
 
   <div class="panel">
     <p class="panel-title">Connection</p>
+
+    <div class="banner bad" id="relinkBanner"></div>
+
     <div class="panel-row">
       <span><span class="status-dot" id="statusDot"></span><span class="status-text" id="statusText">Checking...</span></span>
+      <span class="meta-line" id="connectedAs"></span>
       <button class="save-btn danger" id="relinkBtn" style="margin-left:auto;">Relink WhatsApp</button>
     </div>
-    <div class="qr-box" id="qrRow" style="display:none">
-      <p>Scan with WhatsApp on the KSC Carpets phone: Settings &gt; Linked Devices &gt; Link a Device</p>
-      <img id="qrImage" style="width:200px; height:200px; border:1px solid var(--line); border-radius:8px;">
+
+    <div class="panel-row" style="display:block">
+      <div class="meta-line" id="sessionInfo"></div>
+      <div class="meta-line" id="lastDisconnect" style="margin-top:4px;"></div>
+    </div>
+
+    <div id="linkArea" style="display:none">
+      <div class="link-tabs">
+        <button data-link="qr" class="active">QR code</button>
+        <button data-link="code">Pairing code</button>
+      </div>
+
+      <div id="linkQr" class="qr-box">
+        <p>On the KSC Carpets phone: WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a device, then scan this.</p>
+        <img id="qrImage" style="width:220px; height:220px; border:1px solid var(--line); border-radius:8px; display:none;">
+        <p id="qrWaiting">Waiting for a QR code...</p>
+      </div>
+
+      <div id="linkCode" style="display:none">
+        <span class="field-label">WhatsApp number of the KSC Carpets phone (country code, digits only - e.g. 447911123456)</span>
+        <div class="panel-row" style="margin-top:0">
+          <input type="text" id="pairNumber" placeholder="447911123456" style="max-width:260px">
+          <button class="save-btn" id="pairBtn">Get pairing code</button>
+          <button class="save-btn secondary" id="backToQrBtn">Back to QR</button>
+        </div>
+        <div id="pairResult" style="display:none">
+          <div class="pair-code" id="pairCode"></div>
+          <ol class="steps">
+            <li>On the KSC Carpets phone open WhatsApp.</li>
+            <li>Settings &gt; Linked Devices &gt; Link a device.</li>
+            <li>Tap <b>Link with phone number instead</b>.</li>
+            <li>Type the code above. It expires in a few minutes - get a new one if it does.</li>
+          </ol>
+        </div>
+        <div class="meta-line" id="pairError" style="color:var(--danger); margin-top:8px;"></div>
+      </div>
     </div>
   </div>
 
@@ -142,6 +201,20 @@
     </div>
   </div>
 
+  <div class="panel">
+    <p class="panel-title">Activity &amp; errors</p>
+    <div class="panel-row">
+      <span class="meta-line" id="errorCounts"></span>
+      <label class="toggle-label" style="margin-left:auto;">
+        <span class="switch"><input type="checkbox" id="errorsOnlyToggle"><span class="slider"></span></span>
+        Errors only
+      </label>
+      <button class="save-btn secondary" id="refreshLogBtn">Refresh</button>
+      <button class="save-btn secondary" id="clearLogBtn">Clear</button>
+    </div>
+    <div class="log" id="logBox"></div>
+  </div>
+
   <div class="tabs">
     <button data-tab="leads" class="active">Leads</button>
     <button data-tab="chats">Chats</button>
@@ -161,21 +234,9 @@
   <table id="table">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Phone</th>
-        <th>Status</th>
-        <th>Carpet</th>
-        <th>Room</th>
-        <th>Size</th>
-        <th>Colour</th>
-        <th>Budget</th>
-        <th>Preferred time</th>
-        <th>Address</th>
-        <th>Postcode</th>
-        <th>Contact number</th>
-        <th>Last contacted</th>
-        <th>Change status</th>
-        <th></th>
+        <th>Name</th><th>Phone</th><th>Status</th><th>Carpet</th><th>Room</th><th>Size</th>
+        <th>Colour</th><th>Budget</th><th>Preferred time</th><th>Address</th><th>Postcode</th>
+        <th>Contact number</th><th>Last contacted</th><th>Change status</th><th></th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -190,10 +251,7 @@
         <div class="chat-header" id="chatHeader">
           <span id="chatHeaderName" style="font-size:14px; font-weight:600;">Select a conversation</span>
           <label class="toggle-label" style="margin-left:auto; display:none;" id="takeoverLabel">
-            <span class="switch">
-              <input type="checkbox" id="takeoverToggle">
-              <span class="slider"></span>
-            </span>
+            <span class="switch"><input type="checkbox" id="takeoverToggle"><span class="slider"></span></span>
             I'm replying manually
           </label>
         </div>
@@ -211,21 +269,31 @@
 let allLeads = [];
 let activeFilter = 'all';
 
+function escapeHtml(str) {
+  return String(str == null ? '' : str).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function when(iso) {
+  if (!iso) return 'never';
+  try { return new Date(iso).toLocaleString(); } catch (e) { return String(iso); }
+}
+
+/* ----------------------------- Leads ----------------------------- */
+
 async function loadLeads() {
   const res = await fetch('/api/leads');
   if (!res.ok) return;
   allLeads = await res.json();
   render();
-  document.getElementById('refreshLabel').textContent =
-    'Updated ' + new Date().toLocaleTimeString();
+  document.getElementById('refreshLabel').textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
 
 function render() {
   const rows = document.getElementById('rows');
   const empty = document.getElementById('empty');
-  const filtered = activeFilter === 'all'
-    ? allLeads
-    : allLeads.filter(l => l.status === activeFilter);
+  const filtered = activeFilter === 'all' ? allLeads : allLeads.filter(l => l.status === activeFilter);
 
   rows.innerHTML = '';
   empty.style.display = filtered.length ? 'none' : 'block';
@@ -233,9 +301,6 @@ function render() {
   for (const lead of filtered) {
     const tr = document.createElement('tr');
     const status = lead.status || 'new';
-    const lastContacted = lead.lastContacted
-      ? new Date(lead.lastContacted).toLocaleString()
-      : '';
     tr.innerHTML = `
       <td>${escapeHtml(lead.name || '-')}</td>
       <td>${escapeHtml(lead.phone || '-')}</td>
@@ -249,7 +314,7 @@ function render() {
       <td>${escapeHtml(lead.customerAddress || '-')}</td>
       <td>${escapeHtml(lead.postcode || '-')}</td>
       <td>${escapeHtml(lead.contactNumber || '-')}</td>
-      <td>${lastContacted}</td>
+      <td>${lead.lastContacted ? when(lead.lastContacted) : ''}</td>
       <td>
         <select data-phone="${escapeHtml(lead.phone)}" class="status-select">
           <option value="new" ${status === 'new' ? 'selected' : ''}>New</option>
@@ -259,14 +324,11 @@ function render() {
           <option value="not_interested" ${status === 'not_interested' ? 'selected' : ''}>Not interested</option>
         </select>
       </td>
-      <td>
-        <button class="save-btn danger" style="padding:5px 10px; font-size:12px;" data-phone="${escapeHtml(lead.phone)}">Delete</button>
-      </td>
+      <td><button class="save-btn danger" style="padding:5px 10px; font-size:12px;" data-phone="${escapeHtml(lead.phone)}">Delete</button></td>
     `;
     tr.querySelector('.status-select').addEventListener('change', async (e) => {
       await fetch('/api/leads/' + encodeURIComponent(lead.phone) + '/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: e.target.value }),
       });
       loadLeads();
@@ -280,12 +342,6 @@ function render() {
   }
 }
 
-function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
-}
-
 document.getElementById('filters').addEventListener('click', (e) => {
   if (e.target.tagName !== 'BUTTON') return;
   document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
@@ -294,43 +350,135 @@ document.getElementById('filters').addEventListener('click', (e) => {
   render();
 });
 
+/* ----------------------------- Connection ----------------------------- */
+
+let linkMode = 'qr';
+
+document.querySelectorAll('.link-tabs button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.link-tabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    linkMode = btn.dataset.link;
+    document.getElementById('linkQr').style.display = linkMode === 'qr' ? 'flex' : 'none';
+    document.getElementById('linkCode').style.display = linkMode === 'code' ? 'block' : 'none';
+  });
+});
+
 async function loadStatus() {
   const res = await fetch('/api/status');
   if (!res.ok) return;
-  const { whatsapp, qr } = await res.json();
+  const s = await res.json();
+
   const dot = document.getElementById('statusDot');
   const text = document.getElementById('statusText');
-  dot.className = 'status-dot ' + whatsapp;
-  text.textContent = 'WhatsApp: ' + whatsapp;
+  dot.className = 'status-dot ' + s.whatsapp;
+  text.textContent = 'WhatsApp: ' + s.whatsapp;
+  document.getElementById('connectedAs').innerHTML = s.me ? `Linked number: <b>${escapeHtml(String(s.me).split(':')[0])}</b>` : '';
 
-  const qrRow = document.getElementById('qrRow');
-  if (qr && whatsapp !== 'connected') {
-    qrRow.style.display = 'flex';
-    document.getElementById('qrImage').src = qr;
+  const sess = s.session || {};
+  let sessionLine = `Session backup in Google Sheet: <b>${sess.lastBackupAt ? when(sess.lastBackupAt) : 'not backed up yet'}</b>`;
+  if (sess.restoredFrom && sess.restoredFrom.source) sessionLine += ` &middot; loaded from <b>${escapeHtml(sess.restoredFrom.source)}</b> at startup`;
+  if (sess.lastBackupError) sessionLine += ` &middot; <span style="color:var(--danger)">last backup failed: ${escapeHtml(sess.lastBackupError)}</span>`;
+  document.getElementById('sessionInfo').innerHTML = sessionLine;
+
+  const ld = s.lastDisconnect;
+  document.getElementById('lastDisconnect').innerHTML = ld
+    ? `Last disconnect: <b>${escapeHtml(String(ld.reason))}</b> (code ${escapeHtml(String(ld.statusCode))}) at ${when(ld.at)} &middot; ${escapeHtml(ld.message || '')}`
+    : '';
+
+  const banner = document.getElementById('relinkBanner');
+  if (s.needsRelink && !s.connected) {
+    banner.className = 'banner bad show';
+    banner.textContent = 'WhatsApp is not linked. Scan the QR code below, or use a pairing code, on the KSC Carpets phone.';
   } else {
-    qrRow.style.display = 'none';
+    banner.className = 'banner bad';
+  }
+
+  document.getElementById('linkArea').style.display = s.connected ? 'none' : 'block';
+
+  const img = document.getElementById('qrImage');
+  const waiting = document.getElementById('qrWaiting');
+  if (s.qr) { img.src = s.qr; img.style.display = 'block'; waiting.style.display = 'none'; }
+  else { img.style.display = 'none'; waiting.style.display = 'block'; }
+
+  if (s.pairingCode) {
+    document.getElementById('pairCode').textContent = s.pairingCode;
+    document.getElementById('pairResult').style.display = 'block';
   }
 }
 
-document.getElementById('runNowBtn').addEventListener('click', async (e) => {
-  e.target.disabled = true;
-  e.target.textContent = 'Running...';
-  await fetch('/api/run-now', { method: 'POST' });
-  e.target.textContent = 'Done - check leads/WhatsApp';
-  setTimeout(() => { e.target.disabled = false; e.target.textContent = 'Send follow-ups / reviews now'; loadLeads(); }, 2000);
+document.getElementById('relinkBtn').addEventListener('click', async (e) => {
+  if (!confirm('This disconnects the current WhatsApp session and asks for a new QR / pairing code. Continue?')) return;
+  e.target.disabled = true; e.target.textContent = 'Relinking...';
+  await fetch('/api/whatsapp/relink', { method: 'POST' });
+  setTimeout(() => { e.target.disabled = false; e.target.textContent = 'Relink WhatsApp'; loadStatus(); }, 3000);
 });
 
-document.getElementById('relinkBtn').addEventListener('click', async (e) => {
-  if (!confirm('This disconnects the current WhatsApp session and asks you to scan a new QR code. Continue?')) return;
-  e.target.disabled = true;
-  e.target.textContent = 'Relinking...';
-  await fetch('/api/whatsapp/relink', { method: 'POST' });
-  setTimeout(() => {
-    e.target.disabled = false;
-    e.target.textContent = 'Relink WhatsApp';
-    loadStatus();
-  }, 2000);
+document.getElementById('pairBtn').addEventListener('click', async (e) => {
+  const number = document.getElementById('pairNumber').value.trim();
+  const errBox = document.getElementById('pairError');
+  errBox.textContent = '';
+  if (!number) { errBox.textContent = 'Enter the number first.'; return; }
+  if (!confirm('This clears the current WhatsApp session and starts a fresh link for ' + number + '. Continue?')) return;
+
+  e.target.disabled = true; e.target.textContent = 'Getting code...';
+  try {
+    const res = await fetch('/api/whatsapp/pairing-code', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    document.getElementById('pairCode').textContent = data.code;
+    document.getElementById('pairResult').style.display = 'block';
+  } catch (err) {
+    errBox.textContent = err.message;
+  } finally {
+    e.target.disabled = false; e.target.textContent = 'Get pairing code';
+    loadStatus(); loadLog();
+  }
 });
+
+document.getElementById('backToQrBtn').addEventListener('click', async () => {
+  await fetch('/api/whatsapp/use-qr', { method: 'POST' });
+  document.getElementById('pairResult').style.display = 'none';
+  document.querySelector('.link-tabs button[data-link="qr"]').click();
+  setTimeout(loadStatus, 2000);
+});
+
+/* ----------------------------- Error log ----------------------------- */
+
+async function loadLog() {
+  const onlyErrors = document.getElementById('errorsOnlyToggle').checked;
+  const res = await fetch('/api/errors?limit=120' + (onlyErrors ? '&level=error' : ''));
+  if (!res.ok) return;
+  const data = await res.json();
+  const counts = data.counts || {};
+  document.getElementById('errorCounts').innerHTML =
+    `<b>${counts.errors || 0}</b> error(s), <b>${counts.warnings || 0}</b> warning(s) since the last restart`;
+
+  const box = document.getElementById('logBox');
+  if (!data.entries.length) { box.innerHTML = '<div class="log-row info"><div class="body">Nothing logged yet.</div></div>'; return; }
+  box.innerHTML = data.entries.map((e) => `
+    <div class="log-row ${e.level}">
+      <span class="when">${when(e.time)}</span>
+      <span class="tag">${escapeHtml(e.level)}</span>
+      <div class="body">
+        <span class="scope">${escapeHtml(e.scope)}</span>${escapeHtml(e.message)}
+        ${e.detail ? `<details><summary>details</summary><pre>${escapeHtml(e.detail)}</pre></details>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('refreshLogBtn').addEventListener('click', loadLog);
+document.getElementById('errorsOnlyToggle').addEventListener('change', loadLog);
+document.getElementById('clearLogBtn').addEventListener('click', async () => {
+  await fetch('/api/errors/clear', { method: 'POST' });
+  loadLog();
+});
+
+/* ----------------------------- Settings ----------------------------- */
 
 let currentSettings = {};
 
@@ -346,8 +494,7 @@ async function loadSettings() {
 
 async function saveSettings(partial) {
   const res = await fetch('/api/settings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(partial),
   });
   if (res.ok) {
@@ -358,8 +505,6 @@ async function saveSettings(partial) {
   }
 }
 
-// One button saves everything on this page - toggles no longer save the
-// instant you touch them, so nothing goes live half-edited.
 document.getElementById('saveSettingsBtn').addEventListener('click', () => {
   saveSettings({
     botEnabled: document.getElementById('botEnabledToggle').checked,
@@ -368,6 +513,15 @@ document.getElementById('saveSettingsBtn').addEventListener('click', () => {
     adminNotificationNumber: document.getElementById('adminNotificationNumber').value.trim(),
   });
 });
+
+document.getElementById('runNowBtn').addEventListener('click', async (e) => {
+  e.target.disabled = true; e.target.textContent = 'Running...';
+  await fetch('/api/run-now', { method: 'POST' });
+  e.target.textContent = 'Done - check leads/WhatsApp';
+  setTimeout(() => { e.target.disabled = false; e.target.textContent = 'Send follow-ups / reviews now'; loadLeads(); loadLog(); }, 2000);
+});
+
+/* ----------------------------- Chats ----------------------------- */
 
 document.querySelectorAll('.tabs button').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -409,17 +563,17 @@ async function openChat(phone) {
   activeChatPhone = phone;
   renderChatList();
   const chat = allChats.find(c => c.phone === phone);
-  document.getElementById('chatHeaderName').textContent = chat?.name || phone;
+  document.getElementById('chatHeaderName').textContent = (chat && chat.name) || phone;
   document.getElementById('takeoverLabel').style.display = 'flex';
-  document.getElementById('takeoverToggle').checked = chat?.humanTakeover === true;
-  updateTakeoverNote(chat?.humanTakeover === true);
+  document.getElementById('takeoverToggle').checked = chat && chat.humanTakeover === true;
+  updateTakeoverNote(chat && chat.humanTakeover === true);
 
   const res = await fetch('/api/chats/' + encodeURIComponent(phone) + '/messages');
   const messages = res.ok ? await res.json() : [];
   const box = document.getElementById('chatMessages');
   box.innerHTML = messages.map(m => `
     <div class="msg ${m.role}">
-      <div class="role-label">${m.role === 'user' ? (chat?.name || 'Customer') : (m.role === 'human' ? 'You' : 'AI')}</div>
+      <div class="role-label">${m.role === 'user' ? escapeHtml((chat && chat.name) || 'Customer') : (m.role === 'human' ? 'You' : 'AI')}</div>
       ${escapeHtml(m.text)}
     </div>
   `).join('');
@@ -435,8 +589,7 @@ document.getElementById('takeoverToggle').addEventListener('change', async (e) =
   const humanTakeover = e.target.checked;
   updateTakeoverNote(humanTakeover);
   await fetch('/api/chats/' + encodeURIComponent(activeChatPhone) + '/takeover', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ humanTakeover }),
   });
   loadChats();
@@ -447,11 +600,15 @@ async function sendChatMessage() {
   const text = input.value.trim();
   if (!text || !activeChatPhone) return;
   input.value = '';
-  await fetch('/api/chats/' + encodeURIComponent(activeChatPhone) + '/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const res = await fetch('/api/chats/' + encodeURIComponent(activeChatPhone) + '/send', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
   });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert('Could not send: ' + (data.error || 'unknown error'));
+    loadLog();
+  }
   openChat(activeChatPhone);
 }
 
@@ -467,12 +624,15 @@ setInterval(() => {
   }
 }, 8000);
 
+/* ----------------------------- Boot ----------------------------- */
+
 loadStatus();
 loadSettings();
-setInterval(loadStatus, 4000);
-
 loadLeads();
-setInterval(loadLeads, 30000); // refresh every 30s
+loadLog();
+setInterval(loadStatus, 4000);
+setInterval(loadLeads, 30000);
+setInterval(loadLog, 15000);
 </script>
 </body>
 </html>
