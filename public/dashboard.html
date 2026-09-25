@@ -155,7 +155,9 @@
         </div>
         <div id="pairResult" style="display:none">
           <div class="pair-code" id="pairCode"></div>
+          <div class="meta-line" id="pairAge" style="margin-top:6px;"></div>
           <ol class="steps">
+            <li><b>Open the linking screen on the phone first</b>, then press "Get pairing code" here.</li>
             <li>On the KSC Carpets phone open WhatsApp.</li>
             <li>Settings &gt; Linked Devices &gt; Link a device.</li>
             <li>Tap <b>Link with phone number instead</b>.</li>
@@ -404,6 +406,11 @@ async function loadStatus() {
   if (s.pairingCode) {
     document.getElementById('pairCode').textContent = s.pairingCode;
     document.getElementById('pairResult').style.display = 'block';
+    const ageSec = s.pairingCodeAt ? Math.round((Date.now() - new Date(s.pairingCodeAt).getTime()) / 1000) : null;
+    const ageBox = document.getElementById('pairAge');
+    if (ageSec === null) ageBox.textContent = '';
+    else if (ageSec > 150) ageBox.innerHTML = '<span style="color:var(--danger)">This code is likely expired - press "Get pairing code" again.</span>';
+    else ageBox.textContent = `Code generated ${ageSec}s ago - type it within about 2 minutes.`;
   }
 }
 
