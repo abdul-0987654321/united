@@ -9,85 +9,237 @@ const QRCode = require('qrcode');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const { getAIResponse } = require('./ai');
 const store = require('./store');
 const config = require('./config');
 const sheets = require('./sheets');
+const log = require('./errors');
 
 const logger = pino({ level: 'warn' });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const SESSION_CHUNK_SIZE = 40000; // stay comfortably under a Sheet cell's ~50k char limit
 
-/** Bundles every file in the auth folder into one JSON string, split into chunks. */
-function readAuthFolderAsChunks() {
+/* ============================================================================
+ * SESSION BACKUP / RESTORE  (Google Sheet, because Render's disk is wiped)
+ * ==========================================================================*/
+
+const SESSION_CHUNK_SIZE = 40000; // a Sheet cell caps out around 50k chars
+const SESSION_FORMAT = 'GZ1:';    // marker so we can still read old plain-JSON backups
+const CHUNK_PREFIX = '#';         // keeps Sheets from treating "+abc" as a formula
+const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // safety re-backup every 6h
+
+/**
+ * Only these files are worth backing up.
+ *
+ * The old version bundled the ENTIRE auth folder - including every
+ * session-*.json and sender-key-*.json, which is one file per contact the
+ * number has ever messaged. That grew to megabytes, which became hundreds of
+ * Sheet rows, and saveSession (which clears the sheet FIRST, then appends row
+ * by row) timed out halfway through - leaving the Session tab empty. That is
+ * exactly why a redeploy always came back to a QR screen.
+ *
+ * creds.json is the actual login. pre-keys and app-state-sync keys are small
+ * and worth keeping. Per-contact session/sender keys re-establish themselves.
+ */
+function shouldBackupFile(file) {
+  if (file === 'creds.json') return true;
+  if (file.startsWith('app-state-sync-key-')) return true;
+  if (file.startsWith('app-state-sync-version-')) return true;
+  if (file.startsWith('pre-key-')) return true;
+  return false;
+}
+
+/** Bundles the essential auth files into gzipped, chunked strings for the Sheet. */
+function buildSessionChunks() {
   const dir = config.authDir;
-  if (!fs.existsSync(dir)) return [];
+  if (!fs.existsSync(dir)) return { chunks: [], files: 0, rawBytes: 0, packedBytes: 0 };
+
   const bundle = {};
   for (const file of fs.readdirSync(dir)) {
-    bundle[file] = fs.readFileSync(path.join(dir, file), 'utf8');
+    if (!shouldBackupFile(file)) continue;
+    try {
+      bundle[file] = fs.readFileSync(path.join(dir, file), 'utf8');
+    } catch (err) {
+      log.logWarn('session', `Could not read auth file ${file}: ${err.message}`);
+    }
   }
+  if (!bundle['creds.json']) return { chunks: [], files: 0, rawBytes: 0, packedBytes: 0 };
+
   const json = JSON.stringify(bundle);
+  const packed = SESSION_FORMAT + zlib.gzipSync(Buffer.from(json, 'utf8')).toString('base64');
+
   const chunks = [];
-  for (let i = 0; i < json.length; i += SESSION_CHUNK_SIZE) {
-    chunks.push(json.slice(i, i + SESSION_CHUNK_SIZE));
+  for (let i = 0; i < packed.length; i += SESSION_CHUNK_SIZE) {
+    chunks.push(CHUNK_PREFIX + packed.slice(i, i + SESSION_CHUNK_SIZE));
   }
-  return chunks;
+  return {
+    chunks,
+    files: Object.keys(bundle).length,
+    rawBytes: Buffer.byteLength(json, 'utf8'),
+    packedBytes: packed.length,
+  };
 }
 
-/** Backs up the current session to the Google Sheet - best-effort, never blocks anything. */
-async function backupSessionToSheet() {
+/** Reverses buildSessionChunks. Still understands the old uncompressed format. */
+function unpackSessionChunks(chunks) {
+  const joined = chunks
+    .map((c) => (typeof c === 'string' && c.startsWith(CHUNK_PREFIX) ? c.slice(1) : String(c)))
+    .join('');
+  if (joined.startsWith(SESSION_FORMAT)) {
+    const base64 = joined.slice(SESSION_FORMAT.length);
+    return JSON.parse(zlib.gunzipSync(Buffer.from(base64, 'base64')).toString('utf8'));
+  }
+  return JSON.parse(joined); // legacy backup written by the old code
+}
+
+let backupInFlight = false;
+let lastBackupAt = null;
+let lastBackupError = null;
+let lastRestoreInfo = null;
+let backupIntervalHandle = null;
+
+async function backupSessionToSheet(reason = '') {
+  if (backupInFlight) return false; // never let two backups race - that's what emptied the sheet
+  backupInFlight = true;
   try {
     const credsPath = path.join(config.authDir, 'creds.json');
-    if (!fs.existsSync(credsPath)) return;
+    if (!fs.existsSync(credsPath)) return false;
+
     const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-    // The "registered" flag doesn't reliably flip true on this fork even for
-    // a fully working session - check for actual pairing data instead (a
-    // real WhatsApp identity + signed account), which is what a genuinely
-    // usable session actually needs.
-    if (!creds.me?.id || !creds.account?.accountSignatureKey) {
-      console.log('Session not paired yet - skipping backup for now.');
-      return;
+    // The "registered" flag isn't reliable on this fork, so we check for real
+    // pairing data instead: a WhatsApp identity plus a signed account.
+    if (!creds.me || !creds.me.id || !creds.account || !creds.account.accountSignatureKey) {
+      log.logInfo('session', 'Not paired yet - skipping session backup for now.');
+      return false;
     }
 
-    const chunks = readAuthFolderAsChunks();
-    if (!chunks.length) return;
-    await sheets.saveSessionChunks(chunks);
-    console.log('WhatsApp session backed up to Google Sheet.');
+    const { chunks, files, rawBytes, packedBytes } = buildSessionChunks();
+    if (!chunks.length) {
+      log.logWarn('session', 'Nothing to back up - creds.json missing from the bundle.');
+      return false;
+    }
+
+    await sheets.saveSessionChunks(chunks, {
+      savedAt: new Date().toISOString(),
+      me: creds.me.id,
+      files,
+      rawBytes,
+      packedBytes,
+      format: 'gzip+base64',
+    });
+
+    lastBackupAt = new Date().toISOString();
+    lastBackupError = null;
+    log.logInfo(
+      'session',
+      `Session backed up to the Sheet${reason ? ` (${reason})` : ''}: ${files} file(s), ${rawBytes} bytes raw -> ${packedBytes} packed, ${chunks.length} chunk(s).`
+    );
+    return true;
   } catch (err) {
-    console.error('Session backup failed (non-fatal, will retry next connect):', err.message);
+    lastBackupError = err.message;
+    log.logError('session', err, 'Session backup to the Google Sheet FAILED - a redeploy will ask for a new QR/pairing code');
+    return false;
+  } finally {
+    backupInFlight = false;
   }
 }
 
-/** Restores a session from the Sheet backup if there's no local session yet - e.g. after a redeploy wiped the filesystem. */
+/** Restores the session from the Sheet when the local disk has none (i.e. after every Render restart). */
 async function restoreSessionFromSheetIfNeeded() {
   const dir = config.authDir;
-  const hasLocalSession = fs.existsSync(path.join(dir, 'creds.json'));
-  if (hasLocalSession) return;
+  if (fs.existsSync(path.join(dir, 'creds.json'))) {
+    lastRestoreInfo = { source: 'local disk', at: new Date().toISOString() };
+    log.logInfo('session', 'Local session found on disk - no restore needed.');
+    return false;
+  }
 
+  log.logInfo('session', 'No local session - trying to restore from the Google Sheet backup...');
   try {
-    const chunks = await sheets.loadSessionChunks();
-    if (!chunks.length) return; // nothing backed up yet - a fresh QR scan is expected
-    const bundle = JSON.parse(chunks.join(''));
+    const { chunks, meta } = await sheets.loadSessionChunks();
+    if (!chunks.length) {
+      lastRestoreInfo = { source: 'none', at: new Date().toISOString() };
+      log.logWarn('session', 'No session backup in the Sheet - a QR scan or pairing code will be needed.');
+      return false;
+    }
+
+    const bundle = unpackSessionChunks(chunks);
+    if (!bundle || !bundle['creds.json']) {
+      log.logWarn('session', 'Session backup in the Sheet is incomplete (no creds.json) - a fresh pairing will be needed.');
+      return false;
+    }
+
     fs.mkdirSync(dir, { recursive: true });
     for (const [file, content] of Object.entries(bundle)) {
       fs.writeFileSync(path.join(dir, file), content);
     }
-    console.log('WhatsApp session restored from Google Sheet backup - no QR scan needed.');
+    lastRestoreInfo = { source: 'google sheet', at: new Date().toISOString(), savedAt: meta && meta.savedAt ? meta.savedAt : null };
+    log.logInfo(
+      'session',
+      `Session restored from the Sheet backup (backup saved ${meta && meta.savedAt ? meta.savedAt : 'at an unknown time'}) - no QR needed.`
+    );
+    return true;
   } catch (err) {
-    console.error('Session restore failed, a fresh QR scan will be needed:', err.message);
+    log.logError('session', err, 'Session restore from the Sheet failed - a fresh QR/pairing code will be needed');
+    return false;
   }
 }
 
-// In-memory conversation history, keyed by phone. Resets on restart -
-// fine for an MVP; store.js (local JSON) is the source of truth for lead status.
-const conversations = new Map();
+/** Wipes the session locally AND in the Sheet, so a dead session can't be restored on the next boot. */
+async function wipeSession(reason) {
+  try {
+    fs.rmSync(config.authDir, { recursive: true, force: true });
+  } catch (err) {
+    log.logError('session', err, 'Could not delete the local auth folder');
+  }
+  try {
+    await sheets.clearSessionRemote();
+  } catch (err) {
+    log.logError('session', err, 'Could not clear the Sheet session backup');
+  }
+  lastBackupAt = null;
+  log.logWarn('session', `Session cleared - ${reason}. A new QR scan or pairing code is now required.`);
+}
+
+/* ============================================================================
+ * CONNECTION STATE
+ * ==========================================================================*/
+
+const conversations = new Map(); // in-memory chat history, keyed by phone
 const MAX_HISTORY_TURNS = 10;
 
 let sock = null;
 let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
 let latestQrDataUrl = null;
+let latestQrAt = null;
+let latestPairingCode = null;
+let latestPairingCodeAt = null;
+let pendingPairingNumber = null;
+let pairingRequestedForThisSocket = false;
+let needsRelink = false;
 let reconnectAttempts = 0;
+let reconnectTimer = null;
+let starting = false;
+let lastDisconnectInfo = null;
+let credsBackupTimer = null;
+
+function isConnected() {
+  return connectionStatus === 'connected' && Boolean(sock && sock.user && sock.user.id);
+}
+
+function disconnectReasonName(statusCode) {
+  const match = Object.keys(DisconnectReason).find((key) => DisconnectReason[key] === statusCode);
+  return match || 'unknown';
+}
+
+function scheduleReconnect(ms, reason) {
+  if (reconnectTimer) return; // one pending reconnect at a time - never stack them
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    startWhatsApp().catch((err) => log.logError('whatsapp', err, 'Reconnect attempt failed'));
+  }, ms);
+  log.logInfo('whatsapp', `Reconnecting in ${Math.round(ms / 1000)}s (attempt ${reconnectAttempts}) - reason: ${reason}`);
+}
 
 function jidToPhone(jid) {
   return jid.split('@')[0];
@@ -101,15 +253,10 @@ function pushHistory(phone, role, content) {
   return history;
 }
 
-/**
- * A lead moves through: new -> interested -> booked -> completed.
- * "booked" fires automatically once the required qualifying info is in
- * (name, carpet type, room, and a budget or preferred time) - this is the
- * dashboard's "Booked" column, and staff move it to "completed" by hand
- * once the job is actually done (that's what triggers the review request).
- * A lead already marked booked/completed never gets silently downgraded
- * back to "interested" just because a later message lacked some detail.
- */
+/* ============================================================================
+ * LEAD STATUS + MESSAGE HANDLING  (unchanged behaviour)
+ * ==========================================================================*/
+
 function computeStatus({ intent, currentStatus, hasRequiredInfo }) {
   if (intent === 'not_interested') return 'not_interested';
   if (currentStatus === 'booked' || currentStatus === 'completed') return currentStatus;
@@ -118,19 +265,23 @@ function computeStatus({ intent, currentStatus, hasRequiredInfo }) {
   return currentStatus || 'new';
 }
 
+function buildReplyText(ai) {
+  const options = (ai.options || []).filter(Boolean).slice(0, 10);
+  if (!options.length) return ai.reply;
+  const numbered = options.map((opt, i) => `${i + 1}. ${opt}`).join('\n');
+  return `${ai.reply}\n\n${numbered}`;
+}
+
 async function handleIncomingMessage(msg) {
   if (msg.key.fromMe) return;
-  if (!msg.message) {
-    console.log(`[WhatsApp] Received a message with no decryptable content from ${msg.key.remoteJid} - likely a failed decrypt or a non-content event (reaction, receipt, etc).`);
-    return;
-  }
+  if (!msg.message) return; // failed decrypt, reaction, receipt etc.
+
   const jid = msg.key.remoteJid;
   const isDirectMessage = jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
-  if (!isDirectMessage) return; // ignore groups, channels/newsletters, broadcasts, status
+  if (!isDirectMessage) return; // ignore groups, channels, broadcasts, status
 
   const phone = jidToPhone(jid);
 
-  // Disappearing messages / view-once wrap the real content one level deeper.
   const unwrapped =
     msg.message.ephemeralMessage?.message ||
     msg.message.viewOnceMessage?.message ||
@@ -147,40 +298,23 @@ async function handleIncomingMessage(msg) {
     unwrapped.videoMessage?.caption ||
     '';
 
-  if (!text) {
-    console.log(`[WhatsApp] No extractable text from ${phone}. Message type(s): ${Object.keys(unwrapped).join(', ')}`);
-    return;
-  }
+  if (!text) return;
 
   const pushName = msg.pushName || '';
-  console.log(`[WhatsApp] Message from ${phone} (${pushName}): ${text}`);
+  console.log(`[whatsapp] Message from ${phone} (${pushName}): ${text}`);
 
-  // Instant local read/write - no network call, so this never delays a reply.
   store.logMessage(phone, 'user', text);
   const settings = store.getSettings();
   const lead = store.getLead(phone);
 
-  if (settings.botEnabled === false) {
-    console.log(`[WhatsApp] Bot is paused from the dashboard - not replying to ${phone}.`);
-    return;
-  }
+  if (settings.botEnabled === false) return;
+  if (lead?.humanTakeover === true) return;
 
-  if (lead?.humanTakeover === true) {
-    console.log(`[WhatsApp] Human has taken over ${phone} - AI staying quiet.`);
-    return;
-  }
-
-  // Mark as read (blue tick) and show "typing" - fire-and-forget, since these
-  // are cosmetic touches that hit WhatsApp's own servers and must never be
-  // allowed to delay the actual reply if that connection is slow.
-  sock.readMessages([msg.key]).catch((err) => console.error('Read receipt failed (non-fatal):', err));
-  sock.sendPresenceUpdate('composing', jid).catch((err) => console.error('Presence update failed (non-fatal):', err));
+  sock.readMessages([msg.key]).catch(() => {});
+  sock.sendPresenceUpdate('composing', jid).catch(() => {});
 
   const history = pushHistory(phone, 'user', text);
 
-  // Tell the model exactly what's already confirmed on this lead, so it
-  // never has to re-derive it from raw chat text alone (and never re-asks
-  // for details - like name/address/postcode/contact number - it already has).
   const known = {
     name: lead?.name || '',
     carpetType: lead?.carpetType || '',
@@ -194,14 +328,18 @@ async function handleIncomingMessage(msg) {
     contactNumber: lead?.contactNumber || '',
   };
 
-  const ai = await getAIResponse(history, known);
+  let ai;
+  try {
+    ai = await getAIResponse(history, known);
+  } catch (err) {
+    log.logError('ai', err, `OpenAI call failed for ${phone} - no reply was sent`);
+    return;
+  }
+
   const replyText = buildReplyText(ai);
   pushHistory(phone, 'assistant', replyText);
 
-  // Keep "typing..." showing and wait a natural 2-5s before sending - an
-  // instant, machine-speed reply is one of the clearest automation signals,
-  // so re-send the presence update right before the wait to keep it fresh.
-  await sock.sendPresenceUpdate('composing', jid).catch((err) => console.error('Presence update failed (non-fatal):', err));
+  await sock.sendPresenceUpdate('composing', jid).catch(() => {});
   await sleep(2000 + Math.floor(Math.random() * 3000));
 
   await sock.sendMessage(jid, { text: replyText });
@@ -221,7 +359,7 @@ async function handleIncomingMessage(msg) {
   const status = computeStatus({ intent: ai.intent, currentStatus: lead?.status, hasRequiredInfo });
 
   const updatedLead = store.upsertLead(phone, {
-    jid, // remember the real address - may be @lid, not always @s.whatsapp.net
+    jid,
     name,
     status,
     carpetType,
@@ -235,42 +373,25 @@ async function handleIncomingMessage(msg) {
     contactNumber,
     source: lead?.source || 'whatsapp',
     lastContacted: new Date().toISOString(),
-    followupCount: 0, // they just replied, so the follow-up clock resets
+    followupCount: 0,
   });
 
-  // Notify the admin once, the moment this lead is fully qualified ("booked").
-  // Awaited sync (the customer's reply has already been sent above, so this
-  // doesn't delay them at all): bookedNotified/priceCallbackNotified are
-  // anti-spam gates - if a restart's Sheet-restore rolled one back to a
-  // stale value, the admin would get a duplicate alert.
   if (status === 'booked' && !updatedLead.bookedNotified) {
     notifyAdmin(updatedLead, 'booked');
     await store.upsertLeadAwaitSync(phone, { bookedNotified: true });
   }
 
-  // Also notify the admin the moment a customer declines the visit but still
-  // wants pricing - otherwise "the team will call you" would be an empty
-  // promise, since nothing else in the app would ever alert a human to it.
   if (ai.wantsPriceCallback && !updatedLead.priceCallbackNotified) {
     notifyAdmin(updatedLead, 'price_callback');
     await store.upsertLeadAwaitSync(phone, { priceCallbackNotified: true });
   }
 }
 
-/**
- * Pings the admin's own WhatsApp with a summary of a lead.
- * reason: 'booked' (ready for a measure visit) or 'price_callback' (declined
- * the visit, just wants someone to call them with a price).
- */
 async function notifyAdmin(lead, reason = 'booked') {
   try {
     const settings = store.getSettings();
-    // String(...) first, because adminNotificationNumber can come back as a
-    // number (or other non-string value) if settings.json was hand-edited
-    // without quotes around it - .replace would then crash with "is not a
-    // function" and silently swallow the whole notification.
     const adminNumber = String(settings.adminNotificationNumber || '').replace(/\D/g, '');
-    if (!adminNumber || !sock) return;
+    if (!adminNumber || !isConnected()) return;
 
     const headline = reason === 'price_callback'
       ? `Customer wants a PRICE CALL (declined a visit) - ${lead.name || 'Unknown name'} (${lead.phone})`
@@ -293,115 +414,226 @@ async function notifyAdmin(lead, reason = 'booked') {
 
     await sock.sendMessage(`${adminNumber}@s.whatsapp.net`, { text: lines.join('\n') });
   } catch (err) {
-    console.error('Admin notification failed (non-fatal):', err.message);
+    log.logError('whatsapp', err, 'Admin notification failed');
   }
 }
 
-/**
- * Turns any AI-suggested options into a plain numbered list appended to the
- * reply, instead of native buttons/lists. Native interactive messages are
- * one of the clearest signals WhatsApp uses to flag unofficial automation -
- * plain numbered text ("1. Yes  2. No") gets the same job done far more safely.
- */
-function buildReplyText(ai) {
-  const options = (ai.options || []).filter(Boolean).slice(0, 10);
-  if (!options.length) return ai.reply;
-  const numbered = options.map((opt, i) => `${i + 1}. ${opt}`).join('\n');
-  return `${ai.reply}\n\n${numbered}`;
-}
+/* ============================================================================
+ * SOCKET LIFECYCLE
+ * ==========================================================================*/
 
 async function startWhatsApp() {
-  if (sock) {
-    try { sock.ev.removeAllListeners(); } catch (err) { /* best-effort cleanup */ }
-  }
+  if (starting) return sock;
+  starting = true;
 
-  await restoreSessionFromSheetIfNeeded();
-  const { state, saveCreds } = await useMultiFileAuthState(config.authDir);
-
-  let version;
   try {
-    ({ version } = await fetchLatestBaileysVersion());
-  } catch (err) {
-    console.error('Could not fetch latest Baileys version, using a pinned fallback:', err.message);
-    version = [2, 3000, 1015901307];
-  }
-
-  sock = makeWASocket({
-    version,
-    logger,
-    printQRInTerminal: false,
-    markOnlineOnConnect: false,
-    syncFullHistory: false,
-    browser: ['KSC Carpets Bot', 'Chrome', '120.0.0'],
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, logger),
-    },
-  });
-
-  let backupDebounceTimer = null;
-  sock.ev.on('creds.update', async () => {
-    await saveCreds();
-    // Debounce - creds.update can fire several times in a burst during
-    // pairing, we only want to push to the Sheet once things settle.
-    clearTimeout(backupDebounceTimer);
-    backupDebounceTimer = setTimeout(backupSessionToSheet, 4000);
-  });
-
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      connectionStatus = 'connecting';
-      const qrText = await QRCode.toString(qr, { type: 'terminal', small: true });
-      console.log(qrText);
-      console.log('Scan the QR code above with the KSC Carpets WhatsApp number.');
-      latestQrDataUrl = await QRCode.toDataURL(qr);
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
     }
 
-    if (connection === 'close') {
-      connectionStatus = 'disconnected';
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      const reason = lastDisconnect?.error?.message || 'unknown';
-      if (shouldReconnect) {
-        reconnectAttempts += 1;
-        const backoffMs = Math.min(60000, 3000 * reconnectAttempts);
-        console.log(`Connection closed (${reason}). Reconnecting in ${backoffMs / 1000}s (attempt ${reconnectAttempts})...`);
-        setTimeout(() => startWhatsApp(), backoffMs);
-      } else {
-        console.log(`Connection closed (${reason}). Logged out - scan a new QR code to relink.`);
-      }
-    } else if (connection === 'open') {
-      connectionStatus = 'connected';
-      latestQrDataUrl = null;
-      reconnectAttempts = 0;
-      console.log('WhatsApp connected.');
-      backupSessionToSheet(); // fire-and-forget - no disk needed to survive a redeploy
+    // Tear the old socket down completely before building a new one, so two
+    // sockets can never hold the same session at once (that produced the
+    // "conflict: replaced" disconnects in the logs).
+    if (sock) {
+      try { sock.ev.removeAllListeners(); } catch (err) { /* best effort */ }
+      try { sock.end(undefined); } catch (err) { /* best effort */ }
+      sock = null;
     }
-  });
 
-  sock.ev.on('messages.upsert', async (upsert) => {
-    console.log(`[WhatsApp] messages.upsert received: type=${upsert.type}, count=${upsert.messages?.length || 0}`);
-    if (upsert.type !== 'notify') return; // ignore history-sync style upserts, only handle live new messages
+    await restoreSessionFromSheetIfNeeded();
 
-    for (const msg of upsert.messages || []) {
-      const rawJid = msg.key?.remoteJid || '(no jid)';
-      console.log(`[WhatsApp] Raw message jid: ${rawJid}, fromMe: ${msg.key?.fromMe}`);
+    const { state, saveCreds } = await useMultiFileAuthState(config.authDir);
+    const alreadyPaired = Boolean(state.creds && state.creds.me && state.creds.me.id);
+    needsRelink = !alreadyPaired;
+
+    let version;
+    try {
+      ({ version } = await fetchLatestBaileysVersion());
+    } catch (err) {
+      log.logWarn('whatsapp', `Could not fetch the latest Baileys version (${err.message}) - using the pinned fallback.`);
+      version = [2, 3000, 1015901307];
+    }
+
+    connectionStatus = 'connecting';
+    sock = makeWASocket({
+      version,
+      logger,
+      printQRInTerminal: false,
+      markOnlineOnConnect: false,
+      syncFullHistory: false,
+      browser: ['KSC Carpets Bot', 'Chrome', '120.0.0'],
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, logger),
+      },
+    });
+
+    pairingRequestedForThisSocket = false;
+
+    // --- Phone-number pairing code (alternative to scanning a QR) ---
+    if (!alreadyPaired && pendingPairingNumber) {
+      const numberForPairing = pendingPairingNumber;
+      const socketForPairing = sock;
+      setTimeout(async () => {
+        if (pairingRequestedForThisSocket || socketForPairing !== sock) return;
+        pairingRequestedForThisSocket = true;
+        try {
+          if (typeof sock.requestPairingCode !== 'function') {
+            throw new Error('This Baileys build does not expose requestPairingCode - use the QR code instead.');
+          }
+          const raw = await sock.requestPairingCode(numberForPairing);
+          const formatted = String(raw).replace(/\s|-/g, '').match(/.{1,4}/g).join('-');
+          latestPairingCode = formatted;
+          latestPairingCodeAt = new Date().toISOString();
+          log.logInfo('whatsapp', `Pairing code ready for +${numberForPairing}: ${formatted}`);
+        } catch (err) {
+          latestPairingCode = null;
+          log.logError('whatsapp', err, `Requesting a pairing code for +${numberForPairing} failed`);
+        }
+      }, 3500);
+    }
+
+    sock.ev.on('creds.update', async () => {
       try {
-        await handleIncomingMessage(msg);
+        await saveCreds();
       } catch (err) {
-        console.error('Error handling message:', err);
+        log.logError('session', err, 'Saving creds to disk failed');
+        return;
       }
-    }
-  });
+      // creds.update fires in bursts during pairing - debounce so we push to
+      // the Sheet once, after things settle.
+      clearTimeout(credsBackupTimer);
+      credsBackupTimer = setTimeout(() => {
+        backupSessionToSheet('creds changed').catch(() => {});
+      }, 5000);
+    });
 
-  return sock;
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      if (qr) {
+        connectionStatus = 'connecting';
+        latestQrAt = new Date().toISOString();
+        try {
+          console.log(await QRCode.toString(qr, { type: 'terminal', small: true }));
+          console.log('Scan the QR above with the KSC Carpets WhatsApp number (or use the pairing code on the dashboard).');
+          latestQrDataUrl = await QRCode.toDataURL(qr);
+        } catch (err) {
+          log.logError('whatsapp', err, 'Could not render the QR code');
+        }
+      }
+
+      if (connection === 'close') {
+        connectionStatus = 'disconnected';
+        const err = lastDisconnect && lastDisconnect.error;
+        const statusCode = err && err.output ? err.output.statusCode : null;
+        const reasonName = disconnectReasonName(statusCode);
+        const message = err && err.message ? err.message : 'unknown';
+
+        lastDisconnectInfo = { at: new Date().toISOString(), statusCode, reason: reasonName, message };
+        log.logWarn('whatsapp', `Connection closed - code ${statusCode} (${reasonName}): ${message}`);
+
+        // 401 / loggedOut / device_removed: the phone side killed this device.
+        // The saved creds are dead, so keeping them would just loop forever.
+        if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+          needsRelink = true;
+          latestPairingCode = null;
+          log.logWarn('whatsapp', 'WhatsApp logged this device out (someone removed it in Linked Devices, or WhatsApp removed it). Clearing the saved session and starting a fresh pairing.');
+          await wipeSession('logged out by WhatsApp / the phone (401)');
+          reconnectAttempts = 0;
+          scheduleReconnect(5000, 'fresh pairing after logout');
+          return;
+        }
+
+        // 500 / badSession: the stored keys are corrupt - same treatment.
+        if (statusCode === DisconnectReason.badSession) {
+          needsRelink = true;
+          await wipeSession('the stored session was corrupt (bad session)');
+          reconnectAttempts = 0;
+          scheduleReconnect(5000, 'fresh pairing after a bad session');
+          return;
+        }
+
+        // 440 / connectionReplaced: the same session is running somewhere else
+        // (your local PC, or an overlapping Render deploy). Reconnecting fast
+        // just makes the two fight, so back right off and shout about it.
+        if (statusCode === DisconnectReason.connectionReplaced) {
+          log.logWarn('whatsapp', 'Another copy of this bot took the session over. Make sure it is only running in ONE place (do not run it locally with the live number).');
+          reconnectAttempts += 1;
+          scheduleReconnect(120000, 'connection replaced by another instance');
+          return;
+        }
+
+        reconnectAttempts += 1;
+        if (reconnectAttempts % 10 === 0) {
+          log.logWarn('whatsapp', `Still not connected after ${reconnectAttempts} attempts. If a QR/pairing code is showing on the dashboard, it needs to be scanned or entered on the phone.`);
+        }
+        const backoffMs = Math.min(60000, 5000 * reconnectAttempts);
+        scheduleReconnect(backoffMs, reasonName);
+        return;
+      }
+
+      if (connection === 'open') {
+        connectionStatus = 'connected';
+        latestQrDataUrl = null;
+        latestQrAt = null;
+        latestPairingCode = null;
+        pendingPairingNumber = null;
+        needsRelink = false;
+        reconnectAttempts = 0;
+        lastDisconnectInfo = null;
+        log.logInfo('whatsapp', `WhatsApp connected as ${sock && sock.user ? sock.user.id : 'unknown'}.`);
+        backupSessionToSheet('on connect').catch(() => {});
+      }
+    });
+
+    sock.ev.on('messages.upsert', async (upsert) => {
+      if (upsert.type !== 'notify') return;
+      for (const msg of upsert.messages || []) {
+        try {
+          await handleIncomingMessage(msg);
+        } catch (err) {
+          log.logError('whatsapp', err, `Handling an incoming message from ${msg?.key?.remoteJid || 'unknown'} failed`);
+        }
+      }
+    });
+
+    // Safety net: re-back-up the session every few hours while connected, so a
+    // sudden restart never falls back on a very old key set.
+    if (!backupIntervalHandle) {
+      backupIntervalHandle = setInterval(() => {
+        if (isConnected()) backupSessionToSheet('periodic safety backup').catch(() => {});
+      }, BACKUP_INTERVAL_MS);
+    }
+
+    return sock;
+  } catch (err) {
+    log.logError('whatsapp', err, 'Starting the WhatsApp socket failed');
+    reconnectAttempts += 1;
+    scheduleReconnect(Math.min(60000, 5000 * reconnectAttempts), 'startup failure');
+    return null;
+  } finally {
+    starting = false;
+  }
+}
+
+/* ============================================================================
+ * SENDING
+ * ==========================================================================*/
+
+function assertConnected() {
+  if (!isConnected()) {
+    const detail = lastDisconnectInfo
+      ? ` Last disconnect: code ${lastDisconnectInfo.statusCode} (${lastDisconnectInfo.reason}).`
+      : '';
+    throw new Error(`WhatsApp is not connected - the message was not sent.${detail}`);
+  }
 }
 
 /** Used by followups.js to send a nudge without going through the AI. */
 async function sendWhatsAppMessage(phone, text) {
-  if (!sock) throw new Error('WhatsApp socket not ready yet');
+  assertConnected();
   const lead = store.getLead(phone);
   const jid = lead?.jid || `${phone}@s.whatsapp.net`;
   await sock.sendMessage(jid, { text });
@@ -410,13 +642,17 @@ async function sendWhatsAppMessage(phone, text) {
 
 /** Used by the dashboard when a human takes over and types a manual reply. */
 async function sendManualMessage(phone, text) {
-  if (!sock) throw new Error('WhatsApp socket not ready yet');
+  assertConnected();
   const lead = store.getLead(phone);
   const jid = lead?.jid || `${phone}@s.whatsapp.net`;
   await sock.sendMessage(jid, { text });
   pushHistory(phone, 'assistant', text);
   store.logMessage(phone, 'human', text);
 }
+
+/* ============================================================================
+ * STATUS + RELINK CONTROLS (used by the dashboard)
+ * ==========================================================================*/
 
 function getConnectionStatus() {
   return connectionStatus;
@@ -426,18 +662,89 @@ function getLatestQr() {
   return latestQrDataUrl;
 }
 
-/** Logs out and clears the saved session so a fresh QR is generated - used to relink a different number from the dashboard. */
+function getPairingCode() {
+  return latestPairingCode;
+}
+
+function getStatusPayload() {
+  return {
+    whatsapp: connectionStatus,
+    connected: isConnected(),
+    me: sock && sock.user ? sock.user.id : null,
+    needsRelink,
+    qr: latestQrDataUrl,
+    qrAt: latestQrAt,
+    pairingCode: latestPairingCode,
+    pairingCodeAt: latestPairingCodeAt,
+    pairingNumber: pendingPairingNumber,
+    reconnectAttempts,
+    lastDisconnect: lastDisconnectInfo,
+    session: {
+      lastBackupAt,
+      lastBackupError,
+      restoredFrom: lastRestoreInfo,
+    },
+  };
+}
+
+/** Full relink: clears the session everywhere and comes back on the QR flow. */
 async function resetConnection() {
   try {
-    if (sock) await sock.logout();
+    if (sock && isConnected()) await sock.logout();
   } catch (err) {
-    console.error('Logout error (continuing anyway):', err);
+    log.logWarn('whatsapp', `Logout call failed (continuing anyway): ${err.message}`);
   }
-  fs.rmSync(config.authDir, { recursive: true, force: true });
-  await sheets.clearSessionRemote(); // don't let a stale session get restored next startup
-  connectionStatus = 'disconnected';
+  pendingPairingNumber = null;
+  latestPairingCode = null;
   latestQrDataUrl = null;
+  connectionStatus = 'disconnected';
   reconnectAttempts = 0;
+  needsRelink = true;
+  await wipeSession('manual relink from the dashboard');
+  return startWhatsApp();
+}
+
+/**
+ * Phone-number pairing: WhatsApp shows an 8-character code that the client
+ * types into their phone, instead of scanning a QR off a screenshot.
+ * Phone: WhatsApp > Linked Devices > Link a device > "Link with phone number instead".
+ */
+async function startPairingWithNumber(rawNumber) {
+  const number = String(rawNumber || '').replace(/\D/g, '');
+  if (number.length < 8) {
+    throw new Error('Enter the full WhatsApp number with country code and digits only, e.g. 447911123456.');
+  }
+
+  log.logInfo('whatsapp', `Starting phone-number pairing for +${number}.`);
+  pendingPairingNumber = number;
+  latestPairingCode = null;
+  latestQrDataUrl = null;
+  needsRelink = true;
+
+  try {
+    if (sock && isConnected()) await sock.logout();
+  } catch (err) {
+    log.logWarn('whatsapp', `Logout before pairing failed (continuing anyway): ${err.message}`);
+  }
+
+  await wipeSession('starting phone-number pairing');
+  await startWhatsApp();
+
+  const deadline = Date.now() + 25000;
+  while (!latestPairingCode && Date.now() < deadline) {
+    await sleep(500);
+  }
+  if (!latestPairingCode) {
+    throw new Error('WhatsApp did not return a pairing code in time. Try again, or scan the QR code instead.');
+  }
+  return latestPairingCode;
+}
+
+/** Drops pairing-code mode and goes back to showing a QR. */
+async function switchToQrMode() {
+  pendingPairingNumber = null;
+  latestPairingCode = null;
+  log.logInfo('whatsapp', 'Switched back to QR code mode.');
   return startWhatsApp();
 }
 
@@ -447,5 +754,11 @@ module.exports = {
   sendManualMessage,
   getConnectionStatus,
   getLatestQr,
+  getPairingCode,
+  getStatusPayload,
   resetConnection,
+  startPairingWithNumber,
+  switchToQrMode,
+  isConnected,
+  backupSessionToSheet,
 };
