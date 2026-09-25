@@ -1,7 +1,12 @@
 const cron = require('node-cron');
 const config = require('./config');
 const store = require('./store');
-const { sendWhatsAppMessage } = require('./whatsapp');
+const { sendWhatsAppMessage, isConnected } = require('./whatsapp');
+const log = require('./errors');
+
+// Set FOLLOWUP_DEBUG=1 in Render's env vars to get the per-lead timing dump
+// back. Off by default so the logs stay readable.
+const DEBUG = process.env.FOLLOWUP_DEBUG === '1';
 
 function followupText(template, name) {
   const fallback = "Hi {name}, just checking back about your free measure with KSC Carpets - would you like to go ahead? Reply STOP if you'd rather we didn't contact you again.";
@@ -22,12 +27,39 @@ function reviewReminderText(template, name) {
   return text.replace('{name}', name || 'there').replace('{reviewLink}', googleReviewLink);
 }
 
+/**
+ * Nothing in this file may run while WhatsApp is disconnected.
+ *
+ * Previously it tried anyway: sendMessage then blew up with
+ * "Cannot read properties of undefined (reading 'id')" once per lead, per
+ * minute, filling the logs while the real problem (no session) was buried.
+ */
+function guard(taskName) {
+  if (!isConnected()) {
+    log.logWarn('followups', `WhatsApp is not connected - skipping ${taskName}. Nothing was sent and no lead was marked as contacted.`);
+    return false;
+  }
+  return true;
+}
+
 async function runFollowups() {
   const settings = store.getSettings();
 
   if (settings.followupEnabled === false) {
-    console.log('Follow-ups are paused from the dashboard - skipping this run.');
+    if (DEBUG) log.logInfo('followups', 'Follow-ups are paused from the dashboard - skipping this run.');
     return;
+  }
+  if (!guard('follow-ups')) return;
+
+  if (DEBUG) {
+    const cutoffMs = (settings.followupDelayHours || 0) * 60 * 60 * 1000;
+    const leads = store.getAllLeads().filter((l) => l.status === 'interested');
+    log.logInfo('followups', `tick | enabled=${settings.followupEnabled} delayHours=${settings.followupDelayHours} maxAttempts=${settings.followupMaxAttempts} interestedLeads=${leads.length}`);
+    for (const l of leads) {
+      const last = l.lastContacted ? new Date(l.lastContacted).getTime() : 0;
+      const elapsedMs = Date.now() - last;
+      log.logInfo('followups', `lead ${l.phone}: count=${l.followupCount || 0} last=${l.lastContacted || 'never'} elapsedMs=${elapsedMs} eligible=${(l.followupCount || 0) < settings.followupMaxAttempts && elapsedMs >= cutoffMs}`);
+    }
   }
 
   const leads = store.getLeadsNeedingFollowup();
@@ -42,37 +74,37 @@ async function runFollowups() {
         lastContacted: new Date().toISOString(),
         followupCount: Number(lead.followupCount || 0) + 1,
       });
-      console.log(`Follow-up sent to ${lead.phone}`);
+      log.logInfo('followups', `Follow-up sent to ${lead.phone}.`);
     } catch (err) {
-      console.error(`Follow-up failed for ${lead.phone}:`, err);
+      log.logError('followups', err, `Follow-up failed for ${lead.phone} - it was NOT counted, so it will be retried`);
     }
   }
 }
 
 async function runReviewRequests() {
+  if (!guard('review requests')) return;
+
   const leads = store.getLeadsAwaitingReview();
 
   for (const lead of leads) {
     try {
       await sendWhatsAppMessage(lead.phone, reviewRequestText(lead.name));
-      // Awaited sync: reviewSent is the anti-spam gate for this whole
-      // function - a stale Sheet-restore of it is exactly what caused the
-      // duplicate-review-request bug, so this one must actually land in
-      // the Sheet before we move on.
-      await store.upsertLeadAwaitSync(lead.phone, { reviewSent: true, reviewRequestedAt: new Date().toISOString(), reviewReminderCount: 0 });
-      console.log(`Review request sent via WhatsApp to ${lead.phone}`);
+      await store.upsertLeadAwaitSync(lead.phone, {
+        reviewSent: true,
+        reviewRequestedAt: new Date().toISOString(),
+        reviewReminderCount: 0,
+      });
+      log.logInfo('followups', `Review request sent to ${lead.phone}.`);
     } catch (err) {
-      console.error(`Review request failed for ${lead.phone}:`, err);
+      log.logError('followups', err, `Review request failed for ${lead.phone}`);
     }
   }
 }
 
 async function runReviewReminders() {
   const settings = store.getSettings();
-
-  if (settings.reviewReminderEnabled === false) {
-    return;
-  }
+  if (settings.reviewReminderEnabled === false) return;
+  if (!guard('review reminders')) return;
 
   const leads = store.getLeadsNeedingReviewReminder();
 
@@ -83,26 +115,24 @@ async function runReviewReminders() {
         reviewRequestedAt: new Date().toISOString(),
         reviewReminderCount: Number(lead.reviewReminderCount || 0) + 1,
       });
-      console.log(`Review reminder sent to ${lead.phone}`);
+      log.logInfo('followups', `Review reminder sent to ${lead.phone}.`);
     } catch (err) {
-      console.error(`Review reminder failed for ${lead.phone}:`, err);
+      log.logError('followups', err, `Review reminder failed for ${lead.phone}`);
     }
   }
 }
 
 function startFollowupScheduler() {
-  // Every 15 minutes: check who needs a nudge, a review request, or a review
-  // reminder. The delay/attempt limits themselves are enforced in the store
-  // queries, so this just needs to run often enough that nobody waits too
-  // long past their due time. Each one is caught individually - an error in
-  // one must never crash the whole process (which would also kill the live
-  // WhatsApp connection).
-  cron.schedule('*/15 * * * *', () => {
-    runFollowups().catch((err) => console.error('runFollowups crashed:', err));
-    runReviewRequests().catch((err) => console.error('runReviewRequests crashed:', err));
-    runReviewReminders().catch((err) => console.error('runReviewReminders crashed:', err));
+  // Every 10 minutes. The actual delay/attempt limits are enforced in the
+  // store queries, so this only decides how often we *check*. The old
+  // '* * * * *' (every minute) just multiplied the noise when something was
+  // wrong; ten minutes is still far finer than a 24-hour follow-up window.
+  cron.schedule('*/10 * * * *', () => {
+    runFollowups().catch((err) => log.logError('followups', err, 'runFollowups crashed'));
+    runReviewRequests().catch((err) => log.logError('followups', err, 'runReviewRequests crashed'));
+    runReviewReminders().catch((err) => log.logError('followups', err, 'runReviewReminders crashed'));
   });
-  console.log('Follow-up scheduler started (every 15 minutes).');
+  log.logInfo('followups', 'Follow-up scheduler started (checks every 10 minutes).');
 }
 
 module.exports = { startFollowupScheduler, runFollowups, runReviewRequests, runReviewReminders };
