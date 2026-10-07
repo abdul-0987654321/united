@@ -5,7 +5,10 @@ services:
     plan: starter
     buildCommand: npm install
     startCommand: node src/index.js
+    healthCheckPath: /health
     envVars:
+      - key: NODE_VERSION
+        value: "22"
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL

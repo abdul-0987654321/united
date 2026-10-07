@@ -11,7 +11,7 @@ const DEBUG = process.env.FOLLOWUP_DEBUG === '1';
 function followupText(template, name) {
   const fallback = "Hi {name}, just checking back about your free measure with KSC Carpets - would you like to go ahead? Reply STOP if you'd rather we didn't contact you again.";
   const text = template || fallback;
-  return text.replace('{name}', name || 'there');
+  return text.replaceAll('{name}', name || 'there');
 }
 
 function reviewRequestText(name) {
@@ -24,7 +24,7 @@ function reviewReminderText(template, name) {
   const { googleReviewLink } = config.business;
   const fallback = "Hi {name}, just a quick reminder - we'd really appreciate a Google review when you get a moment: {reviewLink}";
   const text = template || fallback;
-  return text.replace('{name}', name || 'there').replace('{reviewLink}', googleReviewLink);
+  return text.replaceAll('{name}', name || 'there').replaceAll('{reviewLink}', googleReviewLink);
 }
 
 /**
