@@ -8,8 +8,8 @@
  * in the background, with its own retry queue, so a slow or unreachable
  * Sheet never slows down or breaks the bot itself.
  *
- * The session backup/restore calls at the bottom are the exception: those
- * are awaited, because the WhatsApp login itself depends on them.
+ * The WhatsApp login calls (auth*) are the exception: those are awaited,
+ * because the login itself depends on them.
  */
 
 const fetch = require('node-fetch');
@@ -39,7 +39,7 @@ async function callScript(action, payload = {}, timeoutMs = 10000) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ secret, action, payload }),
-      agent: ipv4Agent,
+      agent: webAppUrl.startsWith('https:') ? ipv4Agent : undefined,
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`Apps Script replied HTTP ${res.status} for "${action}"`);
@@ -117,6 +117,19 @@ function getStatus() {
   return { ...state };
 }
 
+/**
+ * Waits (up to timeoutMs) for the background queue to empty. Called on
+ * shutdown, so a redeploy doesn't throw away lead/message updates that were
+ * still waiting to reach the Sheet.
+ */
+async function drain(timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  while ((queue.length || workerRunning) && Date.now() < deadline) {
+    await sleep(200);
+  }
+  return queue.length === 0 && !workerRunning;
+}
+
 /* ---------------- Critical writes - directly awaited, not queued ---------------- */
 
 async function syncSettingsAwait(settings) {
@@ -141,31 +154,33 @@ async function syncLeadAwait(lead) {
   }
 }
 
-/* ---------------- Session backup/restore - directly awaited, not queued ----------------
- * Restoring must finish before the bot starts, and backing up must be a
- * definite success/failure the caller can react to - so these bypass the
- * background queue and call the script directly.
- *
- * saveSession now sends the whole payload in one go and the Apps Script side
- * writes it in a single setValues() call. The old version cleared the Session
- * tab first and then appended one row at a time, which timed out on big
- * payloads and left the tab EMPTY - the reason redeploys kept coming back to
- * a QR screen. */
+/* ---------------- WhatsApp login (auth state) - directly awaited, not queued ----------------
+ * authStore.js owns the batching and retrying for these; they bypass the
+ * background queue so the caller always knows whether the login really
+ * reached the Sheet. */
 
-async function saveSessionChunks(chunks, meta = {}) {
-  return callScript('saveSession', { chunks, meta }, 60000);
+async function authLoad() {
+  const data = await callScript('authLoad', {}, 90000);
+  return (data && data.rows) || [];
 }
 
-async function loadSessionChunks() {
+async function authWrite(upserts, removes) {
+  return callScript('authWrite', { upserts, removes }, 90000);
+}
+
+async function authClear() {
+  await callScript('authClear', {}, 30000);
+}
+
+/** Used by the dashboard to prove the login is actually in the Sheet. */
+async function authInfo() {
+  return callScript('authInfo', {}, 60000);
+}
+
+/** The OLD snapshot backup ("Session" tab) - read once to move an existing login over. */
+async function loadLegacySessionChunks() {
   const data = await callScript('loadSession', {}, 60000);
-  return {
-    chunks: (data && data.chunks) || [],
-    meta: (data && data.meta) || null,
-  };
-}
-
-async function clearSessionRemote() {
-  await callScript('clearSession', {}, 20000);
+  return (data && data.chunks) || [];
 }
 
 /* ---------------- Full restore from Sheet - used once at startup if local data is missing ---------------- */
@@ -182,11 +197,6 @@ async function loadSettingsFromSheet() {
   return callScript('getSettings', {}, 20000);
 }
 
-/** Used by the dashboard to prove the backup is actually there. */
-async function getSessionInfo() {
-  return callScript('sessionInfo', {}, 20000);
-}
-
 module.exports = {
   syncLead,
   syncDeleteLead,
@@ -195,10 +205,12 @@ module.exports = {
   syncSettingsAwait,
   syncLeadAwait,
   getStatus,
-  saveSessionChunks,
-  loadSessionChunks,
-  clearSessionRemote,
-  getSessionInfo,
+  drain,
+  authLoad,
+  authWrite,
+  authClear,
+  authInfo,
+  loadLegacySessionChunks,
   loadAllLeadsFromSheet,
   loadAllMessagesFromSheet,
   loadSettingsFromSheet,

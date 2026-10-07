@@ -208,7 +208,8 @@
         <div class="meta-line" id="sessionInfo" style="margin-top:4px;"></div>
         <div class="meta-line" id="lastDisconnect" style="margin-top:4px;"></div>
         <div class="panel-row" style="margin-top:12px">
-          <button class="save-btn secondary" id="backupNowBtn">Back up session now</button>
+          <button class="save-btn secondary" id="backupNowBtn">Save login to Sheet now</button>
+          <button class="save-btn secondary" id="reconnectBtn">Reconnect now</button>
           <button class="save-btn danger" id="relinkBtn">Unlink &amp; start over</button>
         </div>
       </div>
@@ -441,6 +442,9 @@ async function loadStatus() {
     help.innerHTML = s.me
       ? `The bot is answering customers on <b>${escapeHtml(String(s.me).split(':')[0])}</b>.`
       : 'The bot is answering customers.';
+  } else if (s.replaced) {
+    headline.textContent = 'Taken over by another copy';
+    help.textContent = 'Another copy of the bot (usually the newest deploy) is using this WhatsApp number, so this copy has paused. If nothing else is running, press "Reconnect now" under Technical details.';
   } else if (s.needsRelink) {
     headline.textContent = 'Not linked';
     help.textContent = 'The bot cannot send or receive anything until the phone is linked again. Follow the steps below.';
@@ -455,9 +459,11 @@ async function loadStatus() {
   document.getElementById('connectedAs').innerHTML = s.me ? `Linked number: <b>${escapeHtml(String(s.me).split(':')[0])}</b>` : 'No number linked.';
 
   const sess = s.session || {};
-  let sessionLine = `Session backup in Google Sheet: <b>${sess.lastBackupAt ? when(sess.lastBackupAt) : 'not backed up yet'}</b>`;
-  if (sess.restoredFrom && sess.restoredFrom.source) sessionLine += ` &middot; loaded from <b>${escapeHtml(sess.restoredFrom.source)}</b> at startup`;
-  if (sess.lastBackupError) sessionLine += ` &middot; <span style="color:var(--danger)">last backup failed: ${escapeHtml(sess.lastBackupError)}</span>`;
+  let sessionLine = `Login saved in Google Sheet: <b>${sess.keys || 0} key(s)</b>`;
+  sessionLine += sess.pending ? `, <b>${sess.pending}</b> waiting to save` : ', all saved';
+  if (sess.lastSavedAt) sessionLine += ` &middot; last save ${when(sess.lastSavedAt)}`;
+  if (sess.loadedFrom) sessionLine += ` &middot; at startup: <b>${escapeHtml(sess.loadedFrom)}</b>`;
+  if (sess.lastSaveError) sessionLine += ` &middot; <span style="color:var(--danger)">last save failed: ${escapeHtml(sess.lastSaveError)}</span>`;
   document.getElementById('sessionInfo').innerHTML = sessionLine;
 
   const ld = s.lastDisconnect;
@@ -465,7 +471,7 @@ async function loadStatus() {
     ? `Last disconnect: <b>${escapeHtml(String(ld.reason))}</b> (code ${escapeHtml(String(ld.statusCode))}) at ${when(ld.at)} &middot; ${escapeHtml(ld.message || '')}`
     : '';
 
-  document.getElementById('linkArea').style.display = s.connected ? 'none' : 'block';
+  document.getElementById('linkArea').style.display = (s.connected || !s.needsRelink) ? 'none' : 'block';
 
   const img = document.getElementById('qrImage');
   const waiting = document.getElementById('qrWaiting');
@@ -497,13 +503,19 @@ document.getElementById('backupNowBtn').addEventListener('click', async (e) => {
   try {
     const res = await fetch('/api/whatsapp/backup-session', { method: 'POST' });
     const data = await res.json();
-    alert(data.ok ? 'Session backed up to the Google Sheet.' : 'Backup did not run - see Activity & errors below.');
+    alert(data.ok ? 'Login is fully saved in the Google Sheet.' : 'Some login changes could not be saved yet - see Activity & errors below.');
   } catch (err) {
     alert('Backup failed: ' + err.message);
   } finally {
-    e.target.disabled = false; e.target.textContent = 'Back up session now';
+    e.target.disabled = false; e.target.textContent = 'Save login to Sheet now';
     loadStatus(); loadLog();
   }
+});
+
+document.getElementById('reconnectBtn').addEventListener('click', async (e) => {
+  e.target.disabled = true; e.target.textContent = 'Reconnecting...';
+  await fetch('/api/whatsapp/reconnect', { method: 'POST' });
+  setTimeout(() => { e.target.disabled = false; e.target.textContent = 'Reconnect now'; loadStatus(); loadLog(); }, 3000);
 });
 
 document.getElementById('pairBtn').addEventListener('click', async (e) => {

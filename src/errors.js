@@ -83,13 +83,7 @@ function installProcessHandlers() {
   process.on('uncaughtException', (err) => {
     logError('process', err, 'Uncaught exception (process kept alive)');
   });
-  process.on('SIGTERM', () => {
-    // Render sends SIGTERM on every redeploy / spin-down. Recording it means
-    // you can always tell "the host restarted us" apart from "WhatsApp logged
-    // us out" when you look back at the logs.
-    logWarn('process', 'SIGTERM received - the host is restarting or stopping this service (redeploy or free-tier spin-down).');
-    setTimeout(() => process.exit(0), 1500);
-  });
+  // SIGTERM is handled in index.js, which saves everything before exiting.
 }
 
 module.exports = {

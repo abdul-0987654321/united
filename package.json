@@ -17,5 +17,9 @@
     "node-cron": "^3.0.3",
     "dotenv": "^16.4.5",
     "node-fetch": "^2.7.0"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22.12"
   }
 }
