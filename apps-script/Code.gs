@@ -104,10 +104,25 @@ function getLeadsSheet() {
   return getOrCreateSheet(LEADS_SHEET_NAME, LEAD_HEADERS);
 }
 
+/**
+ * Column names from row 1. Older sheets can have a blank (or partly blank)
+ * header row - the old script wrote every lead in LEAD_HEADERS order without
+ * looking at row 1. In that case the missing names are filled in from that
+ * order and saved, so existing rows keep lining up with the right fields.
+ */
 function leadHeaders(sheet) {
   const lastCol = sheet.getLastColumn();
-  if (lastCol === 0) return [];
-  return sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+  const headers = lastCol ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  if (headers[0] === 'phone' && headers.indexOf('') === -1) return headers;
+
+  const width = Math.max(headers.length, LEAD_HEADERS.length);
+  const fixed = [];
+  for (let i = 0; i < width; i++) fixed.push(headers[i] || LEAD_HEADERS[i] || '');
+  if (fixed[0] !== 'phone') throw new Error('Leads tab: column A must be "phone" (row 1 has "' + fixed[0] + '") - fix the header row');
+  while (fixed.length && !fixed[fixed.length - 1]) fixed.pop();
+  ensureSize(sheet, 1, 1, fixed.length);
+  sheet.getRange(1, 1, 1, fixed.length).setValues([fixed]);
+  return fixed;
 }
 
 /** Adds a column for every field the bot sends that the sheet doesn't have yet. */

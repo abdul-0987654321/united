@@ -132,6 +132,12 @@ function toBool(value) {
 
 function normalizeLead(raw) {
   const lead = { ...newLead(String(raw.phone)), ...raw, phone: String(raw.phone) };
+  // Sheets written by the old Apps Script had no bookedNotified column. A lead
+  // that is already booked/completed was announced back then - don't alert
+  // the admin about it a second time.
+  if ((raw.bookedNotified === undefined || raw.bookedNotified === '') && ['booked', 'completed'].includes(lead.status)) {
+    lead.bookedNotified = true;
+  }
   for (const f of BOOLEAN_FIELDS) lead[f] = toBool(lead[f]);
   for (const f of NUMBER_FIELDS) lead[f] = Number(lead[f]) || 0;
   for (const f of DATE_FIELDS) {
