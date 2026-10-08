@@ -31,6 +31,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const state = { lastSyncAt: null, lastError: null, queued: 0 };
 
+// Reading a whole tab (the WhatsApp login, or a long Messages history) gets
+// slower as the Sheet grows - 30-90s was too short and made startup restores fail.
+const LOAD_TIMEOUT_MS = 180000;
+
 async function callScript(action, payload = {}, timeoutMs = 10000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -160,7 +164,7 @@ async function syncLeadAwait(lead) {
  * reached the Sheet. */
 
 async function authLoad() {
-  const data = await callScript('authLoad', {}, 90000);
+  const data = await callScript('authLoad', {}, LOAD_TIMEOUT_MS);
   return (data && data.rows) || [];
 }
 
@@ -174,27 +178,27 @@ async function authClear() {
 
 /** Used by the dashboard to prove the login is actually in the Sheet. */
 async function authInfo() {
-  return callScript('authInfo', {}, 60000);
+  return callScript('authInfo', {}, LOAD_TIMEOUT_MS);
 }
 
 /** The OLD snapshot backup ("Session" tab) - read once to move an existing login over. */
 async function loadLegacySessionChunks() {
-  const data = await callScript('loadSession', {}, 60000);
+  const data = await callScript('loadSession', {}, LOAD_TIMEOUT_MS);
   return (data && data.chunks) || [];
 }
 
 /* ---------------- Full restore from Sheet - used once at startup if local data is missing ---------------- */
 
 async function loadAllLeadsFromSheet() {
-  return callScript('getAllLeads', {}, 30000);
+  return callScript('getAllLeads', {}, LOAD_TIMEOUT_MS);
 }
 
 async function loadAllMessagesFromSheet() {
-  return callScript('getAllMessages', {}, 30000);
+  return callScript('getAllMessages', {}, LOAD_TIMEOUT_MS);
 }
 
 async function loadSettingsFromSheet() {
-  return callScript('getSettings', {}, 20000);
+  return callScript('getSettings', {}, 60000);
 }
 
 module.exports = {

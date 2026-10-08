@@ -184,21 +184,34 @@ function upsertLead(p) {
 
 function deleteLead(p) {
   return withLock(function () {
-    const sheet = getLeadsSheet();
-    const rowIndex = findLeadRow(sheet, p.phone);
-    if (rowIndex !== -1) sheet.deleteRow(rowIndex);
-
+    const phone = String(p.phone);
+    deleteRowsWhere(getLeadsSheet(), function (v) { return v === phone; });
     // The chat history goes too, same as on the bot side.
-    const messages = getMessagesSheet();
-    const lastRow = messages.getLastRow();
-    if (lastRow >= 2) {
-      const phones = messages.getRange(2, 1, lastRow - 1, 1).getValues();
-      for (let i = phones.length - 1; i >= 0; i--) {
-        if (String(phones[i][0]) === String(p.phone)) messages.deleteRow(i + 2);
-      }
-    }
+    deleteRowsWhere(getMessagesSheet(), function (v) { return v === phone; });
     return {};
   });
+}
+
+/**
+ * Deletes every data row whose column-A value matches, bottom-up in whole
+ * blocks (much faster than row by row). Google refuses to delete ALL
+ * non-frozen rows of a tab ("Sorry, it is not possible to delete all
+ * non-frozen rows") - so keep a few spare empty rows at the bottom first.
+ */
+function deleteRowsWhere(sheet, matches) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  const values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  if (!values.some(function (r) { return matches(String(r[0])); })) return;
+  if (sheet.getMaxRows() - lastRow < 5) sheet.insertRowsAfter(sheet.getMaxRows(), 5);
+  let i = values.length - 1;
+  while (i >= 0) {
+    if (!matches(String(values[i][0]))) { i--; continue; }
+    const end = i;
+    while (i - 1 >= 0 && matches(String(values[i - 1][0]))) i--;
+    sheet.deleteRows(i + 2, end - i + 1);
+    i--;
+  }
 }
 
 function getAllLeads() {
