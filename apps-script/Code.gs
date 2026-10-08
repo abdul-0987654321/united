@@ -104,10 +104,25 @@ function getLeadsSheet() {
   return getOrCreateSheet(LEADS_SHEET_NAME, LEAD_HEADERS);
 }
 
+/**
+ * Column names from row 1. Older sheets can have a blank (or partly blank)
+ * header row - the old script wrote every lead in LEAD_HEADERS order without
+ * looking at row 1. In that case the missing names are filled in from that
+ * order and saved, so existing rows keep lining up with the right fields.
+ */
 function leadHeaders(sheet) {
   const lastCol = sheet.getLastColumn();
-  if (lastCol === 0) return [];
-  return sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+  const headers = lastCol ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  if (headers[0] === 'phone' && headers.indexOf('') === -1) return headers;
+
+  const width = Math.max(headers.length, LEAD_HEADERS.length);
+  const fixed = [];
+  for (let i = 0; i < width; i++) fixed.push(headers[i] || LEAD_HEADERS[i] || '');
+  if (fixed[0] !== 'phone') throw new Error('Leads tab: column A must be "phone" (row 1 has "' + fixed[0] + '") - fix the header row');
+  while (fixed.length && !fixed[fixed.length - 1]) fixed.pop();
+  ensureSize(sheet, 1, 1, fixed.length);
+  sheet.getRange(1, 1, 1, fixed.length).setValues([fixed]);
+  return fixed;
 }
 
 /** Adds a column for every field the bot sends that the sheet doesn't have yet. */
@@ -169,21 +184,34 @@ function upsertLead(p) {
 
 function deleteLead(p) {
   return withLock(function () {
-    const sheet = getLeadsSheet();
-    const rowIndex = findLeadRow(sheet, p.phone);
-    if (rowIndex !== -1) sheet.deleteRow(rowIndex);
-
+    const phone = String(p.phone);
+    deleteRowsWhere(getLeadsSheet(), function (v) { return v === phone; });
     // The chat history goes too, same as on the bot side.
-    const messages = getMessagesSheet();
-    const lastRow = messages.getLastRow();
-    if (lastRow >= 2) {
-      const phones = messages.getRange(2, 1, lastRow - 1, 1).getValues();
-      for (let i = phones.length - 1; i >= 0; i--) {
-        if (String(phones[i][0]) === String(p.phone)) messages.deleteRow(i + 2);
-      }
-    }
+    deleteRowsWhere(getMessagesSheet(), function (v) { return v === phone; });
     return {};
   });
+}
+
+/**
+ * Deletes every data row whose column-A value matches, bottom-up in whole
+ * blocks (much faster than row by row). Google refuses to delete ALL
+ * non-frozen rows of a tab ("Sorry, it is not possible to delete all
+ * non-frozen rows") - so keep a few spare empty rows at the bottom first.
+ */
+function deleteRowsWhere(sheet, matches) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  const values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  if (!values.some(function (r) { return matches(String(r[0])); })) return;
+  if (sheet.getMaxRows() - lastRow < 5) sheet.insertRowsAfter(sheet.getMaxRows(), 5);
+  let i = values.length - 1;
+  while (i >= 0) {
+    if (!matches(String(values[i][0]))) { i--; continue; }
+    const end = i;
+    while (i - 1 >= 0 && matches(String(values[i - 1][0]))) i--;
+    sheet.deleteRows(i + 2, end - i + 1);
+    i--;
+  }
 }
 
 function getAllLeads() {
